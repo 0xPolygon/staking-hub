@@ -28,8 +28,8 @@ abstract contract StakingHub {
     mapping(address service => uint256 id) public services;
 
     mapping(uint256 id => ServiceData serviceData) public serviceData;
-    mapping(address validator => mapping(uint256 serviceId => bool isSubscribed)) public subscribedToService;
-    mapping(address validator => uint256[] services) public subscribedServices;
+    mapping(address staker => mapping(uint256 serviceId => uint256 until)) public subscribedToService;
+    mapping(address staker => uint256[] services) public subscribedServices;
 
     mapping(uint256 id => StrategyData strategyData) public strategyData;
 
@@ -57,16 +57,16 @@ abstract contract StakingHub {
     /// @notice Subscribes to a Service.
     /// @dev Called by a Staker.
     function subscribe(uint256 serviceId, uint256 until) external {
-        require(!subscribedToService[msg.sender][serviceId], "Already subscribed");
+        require(until > subscribedToService[msg.sender][serviceId], "Subscription not extended");
         require(until > block.timestamp, "Invalid until");
 
-        subscribedToService[msg.sender][serviceId] = true;
+        subscribedToService[msg.sender][serviceId] = until;
         subscribedServices[msg.sender].push(serviceId);
 
-        // Alert strategies that the Stake has been subscribed
+        // Alert strategies that the Staker has subscribed
         for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
             uint256 strategyId = serviceData[serviceId].strategies[i];
-            strategyData[strategyId].strategy.onSubscribe(msg.sender, serviceId, until);
+            try strategyData[strategyId].strategy.onSubscribe(msg.sender, serviceId, until) {} catch {}
         }
 
         serviceData[serviceId].service.onSubscribe(msg.sender, until);
@@ -74,17 +74,32 @@ abstract contract StakingHub {
 
     /// @notice Unsubscribes from a Service.
     /// @dev Called by a Staker.
-    function unsubscribe(address service) external {
-        /* if (block.timestamp < unil) {
-            service.onUnsubscribe()
-        } else {
-            revert AlreadyUnsubscribed()?
+    function unsubscribe(uint256 serviceId) external {
+        require(subscribedToService[msg.sender][serviceId] > 0, "Not subscribed");
+
+        // Before until
+        if (block.timestamp < subscribedToService[msg.sender][serviceId]) {
+            serviceData[serviceId].service.onUnsubscribe(msg.sender);
         }
-        // unsusbscribe logic*/
+
+        // Auto unsubscribe after until, so Service can't hold Staker hostage
+        // Alert strategies that the Staker has unsubscribed
+        for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
+            uint256 strategyId = serviceData[serviceId].strategies[i];
+            try strategyData[strategyId].strategy.onUnsubscribe(msg.sender, serviceId) {} catch {}
+        }
+        // Update records
+        for (uint256 i; i < subscribedServices[msg.sender].length; ++i) {
+            if (subscribedServices[msg.sender][i] == serviceId) {
+                delete subscribedServices[msg.sender][i];
+                break;
+            }
+        }
+        subscribedToService[msg.sender][serviceId] = 0;
     }
 
     // 1. ISlasher.validateFreeze()
-    // 2. Call service and announce that validator is frozen
+    // 2. Call Service and announce that Staker is frozen
     function onFreeze(uint256 serviceId, address staker) external {
         // Alert strategies that the Staker has been frozen
         for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
@@ -95,7 +110,7 @@ abstract contract StakingHub {
 
     // 1. service.validateSlashing()
     // 1.1 check how much to slash
-    function onSlash(uint256 service, address validator, uint16 percentage) external {
+    function onSlash(uint256 service, address staker, uint16 percentage) external {
         // TODO
     }
 }
