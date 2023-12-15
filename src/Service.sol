@@ -14,10 +14,10 @@ abstract contract Service {
     /// @dev Called by the Hub.
     /// @dev Should revert if the Staker did not pass the check.
     function onSubscribe(address staker, uint256 stakedUntil) external {
-        _vetStaker(staker, stakedUntil);
+        _validateSubscription(staker, stakedUntil);
     }
 
-    function _vetStaker(address staker, uint256 stakedUntil) internal virtual;
+    function _validateSubscription(address staker, uint256 stakedUntil) internal virtual;
     /* For example:
         // Single strategy
         REQUIRE STR.BALANCEOF > 0
@@ -30,9 +30,9 @@ abstract contract Service {
     /// @dev Permissioned API endpoint.
     /// @dev Called by the Hub.
     function onUnsubscribe(address staker) external {
-        _vetUnsubscription(staker);
+        _validateUnsubscription(staker);
     }
 
     /// @dev Should revert if the Staker did not pass the check.
-    function _vetUnsubscription(address validator) internal virtual;
+    function _validateUnsubscription(address validator) internal virtual;
 }
