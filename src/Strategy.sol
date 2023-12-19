@@ -1,13 +1,32 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import "forge-std/console.sol";
-
 abstract contract Strategy {
+    /// @dev Attempts deleting the first Until to save on gas and clean state.
+    /// @dev Use with _createUntil.
+    /// @dev Saves on gas as long as subscriptions expire faster than new ones are created, and Services do not Unsubscribe Users before Until.
+    modifier gasSaving() {
+        if (head != 0 && block.timestamp >= head) {
+            uint256 headId = head;
+            uint256 nextUntil = list[head].next;
+
+            if (nextUntil != 0) {
+                list[nextUntil].prev = 0;
+            } else {
+                tail = 0;
+            }
+
+            head = nextUntil;
+
+            delete list[headId];
+        }
+        _;
+    }
+
     // ====== Start of AI generated code ====== //
+    // 💬 Linked list
     // 🧑‍💻 Modified by a human
-    // 🛑 Not audited
-    // 🚧 Work in progress
+    // ❗️ Not audited
 
     struct Until {
         uint256 timestamp;
@@ -28,54 +47,55 @@ abstract contract Strategy {
     //mapping(address staker => Subscriptions) subscriptions;
 
     // Function to create a new Until
-    function _createUntil(uint256 _timestamp) private {
-        uint256 current = head;
+    function _createUntil(uint256 _timestamp) private gasSaving {
+        uint256 current = tail;
         uint256 newId = _timestamp; // Unique ID for the new Until
 
-        // Check if the list is empty or the new Until is the earliest
-        if (current == 0 || list[current].timestamp > _timestamp) {
+        // Check if the list is empty or the new Until is the latest
+        if (current == 0 || list[current].timestamp < _timestamp) {
             Until storage newUntil = list[newId];
             newUntil.timestamp = _timestamp;
-            newUntil.next = current; // If list is empty, newUntil.next is 0; otherwise, it's the old head
-            newUntil.prev = 0; // The new node is now the head, so its prev is 0
+            newUntil.prev = current; // If list is empty, newUntil.prev is 0; otherwise, it's the old tail
+            newUntil.next = 0; // The new node is now the tail, so its next is 0
 
             if (current != 0) {
-                list[current].prev = newId; // Update the old head's prev to point to the new head
+                list[current].next = newId; // Update the old tail's next to point to the new tail
             }
 
-            head = newId; // Update the head to the new node
+            tail = newId; // Update the tail to the new node
 
-            if (tail == 0) {
-                tail = newId; // If the list was empty, the new node is also the tail
+            if (head == 0) {
+                head = newId; // If the list was empty, the new node is also the head
             }
 
             return;
         }
 
-        // Find the correct position to insert the new Until
-        while (list[current].next != 0 && list[list[current].next].timestamp < _timestamp) {
-            current = list[current].next;
+        // Traverse backwards to find the correct position to insert the new Until
+        while (list[current].prev != 0 && list[list[current].prev].timestamp > _timestamp) {
+            current = list[current].prev;
         }
 
         Until storage newUntil = list[newId];
         newUntil.timestamp = _timestamp;
-        newUntil.next = list[current].next;
-        newUntil.prev = current;
+        newUntil.prev = list[current].prev;
+        newUntil.next = current;
 
-        list[current].next = newId;
-
-        if (newUntil.next == 0) {
-            tail = newId; // If the new node is at the end, update the tail
+        if (newUntil.prev != 0) {
+            list[newUntil.prev].next = newId;
         } else {
-            list[newUntil.next].prev = newId; // Otherwise, update the next node's prev
+            head = newId; // Update the head if the new node is now the first node
         }
+
+        list[current].prev = newId;
     }
 
     // Function to add a service; can create a new Until, remove a Service, remove an Until
     function addService(uint256 _timestamp, uint256 _service) internal {
-        uint256 _untilId = _timestamp; // Unique ID for the new Until
+        require(_timestamp != 0, "Invalid timestamp");
+        require(_timestamp > block.timestamp, "Invalid timestamp");
 
-        require(_untilId != 0, "Invalid timestamp");
+        uint256 _untilId = _timestamp; // Unique ID for the new Until
 
         // If subscription exists, require that the new timestamp is greater than the current one
         if (_currentUntil[_service] != 0) {
@@ -119,7 +139,7 @@ abstract contract Strategy {
         _currentUntil[_service] = 0;
     }
 
-    // Function to remove an Until; requires that all services have been removed
+    // Function to remove an Until; requires that all services have been removed or the Until has expired
     function _deleteUntil(uint256 _untilId) private {
         require(_untilId != 0, "Cannot remove sentinel Until");
 
@@ -129,7 +149,7 @@ abstract contract Strategy {
         require(untilToRemove.timestamp != 0, "Until does not exist");
 
         // Check if unsubscribed from all services
-        require(untilToRemove.servicesCounter == 0, "Cannot remove Until with active services");
+        require(untilToRemove.servicesCounter == 0 || block.timestamp >= untilToRemove.timestamp, "Cannot remove Until with active services");
 
         uint256 prevUntil = untilToRemove.prev;
         uint256 nextUntil = untilToRemove.next;
@@ -158,14 +178,6 @@ abstract contract Strategy {
     // TODO Can be POL, ERC20s, NFTs.
     mapping(address staker => uint256 balance) private _balances;
 
-    // The following variables are used for locking funds.
-    // _lockedUntil will be set to the highest until value.
-    // Problem: If the Staker unsubscribes from all _lockers (the ones with the highest until value), the funds will become unlocked.
-    // How to implement the solution without poluting the state?
-    mapping(address staker => uint256 unlockTime) private _lockedUntil;
-    mapping(address staker => uint256[] lockers) private _lockers;
-    mapping(address staker => uint256 lockersCounter) private _lockersCounter;
-
     /// @notice Adds funds to be available for restaking.
     /// @dev Called by a Staker.
     function deposit() external payable {
@@ -179,46 +191,26 @@ abstract contract Strategy {
 
     /// @dev Called buy the Hub when a Staker subscribes.
     function onSubscribe(address staker, uint256 service, uint256 until) external {
-        _lock(staker, service, until);
-    }
-
-    /// @notice Updates an unlock time.
-    function _lock(address staker, uint256 service, uint256 until) internal {
-        if (_lockedUntil[staker] < until) {
-            return;
-        } else if (_lockedUntil[staker] == until) {
-            _lockers[staker].push(service);
-        } else {
-            delete _lockers[staker];
-            delete _lockersCounter[staker];
-            _lockers[staker].push(service);
-            _lockedUntil[staker] = until;
-        }
-        ++_lockersCounter[staker];
+        addService(until, service);
     }
 
     /// @notice Withdraws funds from the Strategy.
+    /// @notice Funds are locked until no active subscription remain (expired or unsubbed from).
     /// @dev Called by a Staker.
     function withdraw() external {
-        // lock withdrawal until unlockTime
-        require(_lockedUntil[msg.sender] < block.timestamp, "Locked");
-        // or the Hub has notified that the Staker has unsubscribed
-        require(_lockersCounter[msg.sender] == 0, "Locked");
+        require(tail != 0 && block.timestamp >= tail || head == 0 && tail == 0, "Funds locked");
 
-        (bool success,) = msg.sender.call{value: _balances[msg.sender]}("");
-        require(success, "Failed");
+        uint256 value = _balances[msg.sender];
+        _balances[msg.sender] = 0;
+
+        (bool success,) = msg.sender.call{value: value}("");
+        require(success, "Withdrawal failed");
     }
 
     /// @notice Notifies the Strategy that the Staker has unsubscribed from a Service.
     /// @dev Called by the Hub.
     function onUnsubscribe(address staker, uint256 service) external {
-        for (uint256 i; i < _lockers[staker].length; ++i) {
-            if (_lockers[staker][i] == service) {
-                delete _lockers[staker][i];
-                --_lockersCounter[staker];
-                break;
-            }
-        }
+        removeService(_currentUntil[service], service);
     }
 
     /// @dev Called by the Hub.
