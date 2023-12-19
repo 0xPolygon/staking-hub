@@ -5,6 +5,7 @@ abstract contract Strategy {
     /// @dev Attempts deleting the first Until to save on gas and clean state.
     /// @dev Use with _createUntil.
     /// @dev Saves on gas as long as subscriptions expire faster than new ones are created, and Services do not Unsubscribe Users before Until.
+    /// @dev Saves ~350 gas. Trying costs ~145 gas.
     modifier gasSaving() {
         if (head != 0 && block.timestamp >= head) {
             uint256 headId = head;
@@ -41,7 +42,7 @@ abstract contract Strategy {
     uint256 head;
     uint256 tail;
     // For subscription extension functionality
-    mapping(uint256 service => uint256 untilId) _currentUntil;
+    mapping(uint256 service => uint256 untilId) _lastUntil;
     //}
 
     //mapping(address staker => Subscriptions) subscriptions;
@@ -98,10 +99,10 @@ abstract contract Strategy {
         uint256 _untilId = _timestamp; // Unique ID for the new Until
 
         // If subscription exists, require that the new timestamp is greater than the current one
-        if (_currentUntil[_service] != 0) {
-            require(_timestamp > list[_currentUntil[_service]].timestamp, "Timestamp must be greater than the current one");
+        if (_lastUntil[_service] > block.timestamp) {
+            require(_timestamp > list[_lastUntil[_service]].timestamp, "Timestamp must be greater than the current one");
             // Remove service from the old Until
-            removeService(_currentUntil[_service], _service);
+            removeService(_lastUntil[_service], _service);
         }
 
         Until storage until = list[_untilId];
@@ -117,7 +118,7 @@ abstract contract Strategy {
         }
 
         // Update service tracker
-        _currentUntil[_service] = _untilId;
+        _lastUntil[_service] = _untilId;
     }
 
     // Function to remove a service for an existing Until; can remove an Until
@@ -134,9 +135,6 @@ abstract contract Strategy {
         if (until.servicesCounter == 0) {
             _deleteUntil(_untilId);
         }
-
-        // Update service tracker
-        _currentUntil[_service] = 0;
     }
 
     // Function to remove an Until; requires that all services have been removed or the Until has expired
@@ -210,7 +208,7 @@ abstract contract Strategy {
     /// @notice Notifies the Strategy that the Staker has unsubscribed from a Service.
     /// @dev Called by the Hub.
     function onUnsubscribe(address staker, uint256 service) external {
-        removeService(_currentUntil[service], service);
+        removeService(_lastUntil[service], service);
     }
 
     /// @dev Called by the Hub.
