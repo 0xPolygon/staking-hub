@@ -24,7 +24,7 @@ abstract contract Strategy is SubscriptionTracker {
 
     /// @notice Retrieves all Staker's funds from the Strategy.
     /// @notice The Staker must be unsubscribed from all Services first.
-    /// @notice A Staker is unsubscribed from a Service if the Staker unsubscribed via the Hub, or the subscription has expired.
+    /// @notice A Staker is unsubscribed from a Service if the Staker has unsubscribed though the Hub, or the subscription has expired.
     /// @dev Called by the Staker.
     function withdraw() external {
         Subscriptions storage $ = subscriptions[msg.sender];
@@ -39,7 +39,7 @@ abstract contract Strategy is SubscriptionTracker {
     }
 
     /// @notice Stats tracking a subscription.
-    /// @dev Called by the Hub when a Staker has subscribed to a Services that uses the Strategy.
+    /// @dev Called by the Hub when a Staker subscribes to a Services that uses the Strategy.
     function onSubscribe(address staker, uint256 service, uint256 until) external {
         addSubscription(staker, until, service);
     }
@@ -52,7 +52,7 @@ abstract contract Strategy is SubscriptionTracker {
     }
 
     /// @notice Takes a portion of a Staker's funds away.
-    /// @dev Called by the Hub when a Staker has subscribed to a Services that uses the Strategy.
+    /// @dev Called by the Hub when a Staker has been slashed by a Slasher of a Service that uses the Strategy.
     function onSlash(address staker, uint8 percentage) external virtual {
         uint256 amount = _balances[staker] * percentage;
 
@@ -69,5 +69,5 @@ abstract contract Strategy is SubscriptionTracker {
     //
     // An alternative approach is to record each Service the Staker subscribes to,
     // and check if all subscriptions have expired via the Hub on withdraw.
-    // Similar approach can be imolemented internally as well.
+    // A similar approach can be imolemented internally as well.
 }

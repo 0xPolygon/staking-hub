@@ -8,7 +8,7 @@ import {Strategy} from "src/Strategy.sol";
 /// @author Polygon Labs
 /// @notice The Hub is a permissionless place where Stakers and Services gather.
 /// @notice The goal is to create new income streams for Stakers. Meanwhile, Services can acquire Stakers.
-/// @notice Stakers can subscribe to Services (i.e. restake) via Strategies.
+/// @notice Stakers can subscribe to Services (i.e., restake) via Strategies.
 abstract contract StakingHub {
     struct ServiceData {
         Service service;
@@ -75,6 +75,8 @@ abstract contract StakingHub {
 
     /// @notice Subscribes a Staker to a Service.
     /// @dev Called by the Staker.
+    /// @dev Calls onSubscribe on all Strategies the Service uses.
+    /// @dev Calls onSubscribe on the Service.
     function subscribe(uint256 serviceId, uint256 until) external {
         require(until > block.timestamp, "Invalid until");
         require(until > subscriptionEnd[msg.sender][serviceId], "Existing subscription not extended");
@@ -96,6 +98,8 @@ abstract contract StakingHub {
 
     /// @notice Unsubscribes a Staker from a Service.
     /// @dev Called by the Staker.
+    /// @dev Calls onSubscribe on the Service.
+    /// @dev Calls onSubscribe on all Strategies the Service uses.
     function unsubscribe(uint256 serviceId) external {
         require(subscriptionEnd[msg.sender][serviceId] <= block.timestamp, "Not subscribed");
         require(freezeEnd[msg.sender][serviceId] < block.timestamp, "Cannot unsubscribe while frozen");
@@ -161,9 +165,9 @@ abstract contract StakingHub {
         delete slasherUpdate[services[msg.sender]];
     }
 
-    /// @notice Temporarily prevents a Staker from taking action.
+    /// @notice Temporarily prevents a Staker from unsubscribing from a Service.
     /// @notice This period can be used to prove the Staker should be slashed.
-    /// @dev Called by a Slasher;
+    /// @dev Called by a Slasher of the Service.
     function onFreeze(uint256 serviceId, address staker) external {
         require(msg.sender == serviceData[serviceId].slasher, "Only Slasher can freeze");
 
@@ -181,7 +185,8 @@ abstract contract StakingHub {
 
     /// @notice Takes a portion of a Staker's funds away.
     /// @notice The Staker must be frozen first.
-    /// @dev Called by a Slasher.
+    /// @dev Called by a Slasher of a Service.
+    /// @dev Calls onSlash on all Strategies the Services uses.
     function onSlash(uint256 serviceId, address staker, uint8 slashPercentage) external {
         require(msg.sender == serviceData[serviceId].slasher, "Only Slasher can slash");
         require(freezeEnd[staker][serviceId] > block.timestamp, "Staker not frozen");
