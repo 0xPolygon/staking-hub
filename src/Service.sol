@@ -6,8 +6,7 @@ pragma solidity 0.8.23;
 /// @notice A service is the source of truth for a network.
 /// @dev Service base interface.
 abstract contract Service {
-    /// @return The maximum slash percentage.
-    function slashPercentage() external view virtual returns (uint8);
+    //function slashPercentage() external view virtual returns (uint8);
 
     /// @notice Performs all checks on e.g., sufficient voting power, whitelist, bls key check, etc.
     /// @dev Permissioned API endpoint.
@@ -34,5 +33,8 @@ abstract contract Service {
     }
 
     /// @dev Should revert if the Staker did not pass the check.
-    function _validateUnsubscription(address validator) internal virtual;
+    function _validateUnsubscription(address staker) internal virtual;
+
+    /// @dev Called by the Hub.
+    function onFreeze(address staker) external virtual;
 }

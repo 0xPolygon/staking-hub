@@ -29,6 +29,13 @@ abstract contract Strategy {
     // 🧑‍💻 Modified by a human
     // ❗️ Not audited
 
+    // Note (TBD):
+    // This is internal subscription tracking.
+    //
+    // An alternative is to record each service the user subscribes to
+    // and then check if all the subscriptions have expired
+    // via the Hub (subscribedToService) on withdraw.
+
     struct Until {
         uint256 timestamp;
         mapping(uint256 => bool) services;
@@ -41,7 +48,7 @@ abstract contract Strategy {
         mapping(uint256 timestampAsId => Until) list; // Doubly linked list
         uint256 head;
         uint256 tail;
-        // For subscription extension functionality
+        // For subscription extension functionality (can also be used to check if the user has an active subscription with a service)
         mapping(uint256 service => uint256 untilId) _lastUntil;
     }
 
@@ -215,16 +222,17 @@ abstract contract Strategy {
     /// @dev Called by the Hub.
     function onUnsubscribe(address staker, uint256 service) external {
         Subscriptions storage $ = subscriptions[staker];
-
         removeService(staker, $._lastUntil[service], service);
     }
 
-    /// @dev Called by the Hub.
-    function onFreeze(address staker) external {
-        require(msg.sender == HUB, "Unauthorized");
-        _onFreeze(staker);
-    }
+    //function onFreeze(address staker) external virtual {}
 
-    function _onFreeze(address staker) internal virtual;
-    // e.g. may want to freeze withdrawals
+    function onSlash(address staker, uint8 percentage) external virtual {
+        uint256 amount = _balances[staker] * percentage;
+        _balances[staker] -= amount;
+
+        // Burn, for now.
+        (bool success,) = address(0).call{value: amount}("");
+        require(success, "Slash failed");
+    }
 }
