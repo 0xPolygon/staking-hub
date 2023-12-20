@@ -3,38 +3,22 @@ pragma solidity 0.8.23;
 
 /// @title Service
 /// @author Polygon Labs
-/// @notice A service is the source of truth for a network.
-/// @dev Service base interface.
+/// @notice A Service represents a network.
+/// @notice Stakers can subscribe to the Service (i.e., restake).
 abstract contract Service {
-    //function slashPercentage() external view virtual returns (uint8);
+    /// @notice Lets a Staker restake with the Service.
+    /// @notice Performs all neccessary checks on the Staker (e.g., voting power, whitelist, BLS-key, etc.).
+    /// @dev Called by the Hub when a Staker subscribes to the Service.
+    /// @dev The Service can revert.
+    function onSubscribe(address staker, uint256 stakedUntil) external virtual;
 
-    /// @notice Performs all checks on e.g., sufficient voting power, whitelist, bls key check, etc.
-    /// @dev Permissioned API endpoint.
-    /// @dev Called by the Hub.
-    /// @dev Should revert if the Staker did not pass the check.
-    function onSubscribe(address staker, uint256 stakedUntil) external {
-        _validateSubscription(staker, stakedUntil);
-    }
+    /// @notice Lets a Staker unstake from the Service.
+    /// @notice Performs all neccessary checks on the Staker.
+    /// @dev Called by the Hub when a Staker unsubscribes from the Service.
+    /// @dev The Service can revert when the subscription hasn't expired.
+    function onUnsubscribe(address staker) external virtual;
 
-    function _validateSubscription(address staker, uint256 stakedUntil) internal virtual;
-    /* For example:
-        // Single strategy
-        REQUIRE STR.BALANCEOF > 0
-        // multiple strategies required
-        REQUIRE STR1.BALANCEOF > 0 && ...
-        // subset of strategies
-        REQUIRE STR1.BALANCEOF > 0 || ... */
-
-    /// @notice Validates an unsubscription from the service
-    /// @dev Permissioned API endpoint.
-    /// @dev Called by the Hub.
-    function onUnsubscribe(address staker) external {
-        _validateUnsubscription(staker);
-    }
-
-    /// @dev Should revert if the Staker did not pass the check.
-    function _validateUnsubscription(address staker) internal virtual;
-
-    /// @dev Called by the Hub.
+    /// @notice Functionality not defined.
+    /// @dev Called by the Hub when a Staker has been frozen by a Slasher of the Service.
     function onFreeze(address staker) external virtual;
 }
