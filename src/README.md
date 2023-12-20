@@ -4,7 +4,7 @@
 
 ### Subscription tracking
 
-- Linked list is used for tracking Subscriptions.
+- Subscriptions are tracked in a linked list.
 - Adding a Subscription with a unqiue end-time creates a new item and adds the Service to the item.
 - Adding a Subscription with an existing end-time only adds the Service to the item.
 - Removing a Subscription removes the Service from the item it is in.
