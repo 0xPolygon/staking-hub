@@ -1,7 +1,16 @@
 # Summary
 - [Home](README.md)
 # src
+  - [❱ example](src/example/README.md)
+    - [ISlasherExample](src/example/ISlasher.sol/interface.ISlasherExample.md)
   - [❱ interface](src/interface/README.md)
     - [ICounter](src/interface/ICounter.sol/interface.ICounter.md)
+    - [IService](src/interface/IService.sol/interface.IService.md)
+    - [IStrategy](src/interface/IStrategy.sol/interface.IStrategy.md)
     - [IVersioned](src/interface/IVersioned.sol/interface.IVersioned.md)
+  - [❱ lib](src/lib/README.md)
+    - [Subscriptions](src/lib/SubscriptionsStd.sol/struct.Subscriptions.md)
+    - [SubscriptionsStd](src/lib/SubscriptionsStd.sol/library.SubscriptionsStd.md)
+  - [BaseStrategy](src/BaseStrategy.sol/abstract.BaseStrategy.md)
   - [Counter](src/Counter.sol/contract.Counter.md)
+  - [Hub](src/StakingHub.sol/contract.Hub.md)

@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.23;
+
+import {IStrategy} from "./interface/IStrategy.sol";
+
+/// @title BaseStrategy
+/// @author Polygon Labs
+/// @notice A Strategy holds and manages Stakers' funds.
+/// @notice A Staker deposits funds into the Strategy before subscribing to a Services that uses the Strategy.
+abstract contract BaseStrategy is IStrategy {
+    address public stakingHub;
+
+    mapping(address => uint256) slashableAmount;
+    mapping(uint256 service => uint8) slashPercentages;
+    mapping(uint256 => Service) services;
+    uint256 highestStakeService;
+
+    struct Service {
+        uint256 index;
+        uint256 left;
+        uint256 right;
+        uint256 amount;
+    }
+
+    modifier onlyStakingHub() {
+        require(msg.sender == stakingHub, "Only StakingHub can call this function.");
+        _;
+    }
+
+    constructor(address _stakingHub) {
+        stakingHub = _stakingHub;
+    }
+
+    // FUNCTIONS TO IMLPLEMENT
+    function _balanceOf(address staker) internal view virtual returns (uint256);
+    function _withdraw(uint256 amount) internal virtual;
+    function deposit() external virtual;
+    function onSlash(address user, uint8 percentage) external virtual;
+
+    function withdraw(uint256 amount) external {
+        require(_withdrawableAmount() >= amount, "BaseStrategy: amount exceeds withdrawable amount");
+        _withdraw(amount);
+    }
+
+    function balanceOf(address staker) external view returns (uint256) {
+        return _balanceOf(staker);
+    }
+
+    /// @dev returns amount of veTKN that can be withdrawn
+    function _withdrawableAmount() private view returns (uint256 amount) {
+        uint256 slashable = slashableAmount[msg.sender];
+        uint256 highestStake = services[highestStakeService].amount;
+
+        // use highest
+        return _balanceOf(msg.sender) - highestStake >= slashable ? highestStake : slashable;
+    }
+
+    /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Strategy.
+    /// @dev Triggered before `onRestake` on the Service.
+    function onRestake(
+        address staker,
+        uint256 service,
+        uint256 lockingInUntil, // review not required here, keep it?
+        uint256 stakingAmount,
+        uint8 maximumSlashingPercentage
+    ) external override onlyStakingHub {
+        uint256 totalStakedAmount = services[service].amount;
+
+        if (slashPercentages[service] == 0) {
+            slashPercentages[service] = maximumSlashingPercentage;
+            slashableAmount[staker] += ((stakingAmount / _balanceOf(staker)) * maximumSlashingPercentage) / 100;
+        } else if (slashPercentages[service] == maximumSlashingPercentage) {
+            slashableAmount[staker] += ((stakingAmount / _balanceOf(staker)) * maximumSlashingPercentage) / 100;
+        } else {
+            // new maximumSlashingPercentage
+            // update slashablePercentage using the new maximumSlashingPercentage
+            uint256 oldSlash = ((totalStakedAmount - stakingAmount) * slashPercentages[service]) / 100;
+            uint256 newSlash = ((totalStakedAmount) * maximumSlashingPercentage) / 100;
+            slashableAmount[staker] -= oldSlash;
+            slashableAmount[staker] += newSlash;
+        }
+
+        updateHighestStake(service, totalStakedAmount);
+
+        require(slashableAmount[staker] <= _balanceOf(staker), "BaseStrategy: Slashable amount too high.");
+    }
+
+    /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
+    /// @dev Triggered after `onUnstake` on the Service.
+    function onUnstake(address staker, uint256 service) external override onlyStakingHub {
+        // review let's say HUB only allows unstaking the same amount that you staked before.
+        // we can avoid loops in the onUnstake hook this way!
+
+        uint256 slashChange = services[service].amount * slashPercentages[service] / 10_000;
+
+        slashableAmount[staker] -= slashChange;
+
+        // delete service entry
+        Service memory serviceEntry = services[service];
+        services[serviceEntry.left].right = serviceEntry.right;
+        services[serviceEntry.right].left = serviceEntry.left;
+        delete services[service];
+
+        // update highestStakeService if necessary
+        if (service == highestStakeService) {
+            highestStakeService = serviceEntry.left;
+        }
+    }
+
+    function updateHighestStake(uint256 service, uint256 totalStakedAmount) private {
+        // new high, if first entry, second line won't have any effect
+        if (services[highestStakeService].amount <= totalStakedAmount) {
+            services[service] = Service({index: service, left: highestStakeService, right: 0, amount: totalStakedAmount});
+            services[highestStakeService].right = service;
+            highestStakeService = service;
+        } else {
+            // sort it in
+            uint256 currentServiceIndex = services[highestStakeService].left;
+            while (true) {
+                Service memory currentService = services[currentServiceIndex];
+
+                // found lower entry
+                if (currentService.amount < totalStakedAmount) {
+                    Service memory higherService = services[currentService.right];
+                    services[service] = Service({index: service, left: currentService.index, right: higherService.index, amount: totalStakedAmount});
+                    higherService.left = service;
+                    currentService.right = service;
+                    break;
+                }
+
+                // found bottom
+                if (currentService.amount > totalStakedAmount && currentService.left == 0) {
+                    services[service] = Service({index: service, left: 0, right: currentService.index, amount: totalStakedAmount});
+                    currentService.left = service;
+                    break;
+                }
+
+                currentServiceIndex = currentService.left;
+            }
+        }
+    }
+}
