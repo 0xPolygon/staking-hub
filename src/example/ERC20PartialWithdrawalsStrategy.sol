@@ -29,7 +29,7 @@ abstract contract ERC20PartialWithdrawalsStrategy is BaseStrategy {
     function _withdraw(uint256 amount) internal virtual;
 
     function withdraw(uint256 amount) external virtual {
-        require(_withdrawableAmount() >= amount, "BaseStrategy: amount exceeds withdrawable amount");
+        require(_withdrawableAmount() >= amount, "ERC20PartialWithdrawalsStrategy: amount exceeds withdrawable amount");
         _withdraw(amount);
     }
 
@@ -51,8 +51,6 @@ abstract contract ERC20PartialWithdrawalsStrategy is BaseStrategy {
         uint256 stakingAmount,
         uint8 maximumSlashingPercentage
     ) internal override {
-        require(msg.sender == stakingHub, "Only StakingHub can call this function.");
-
         uint256 totalStakedAmount = services[service].amount;
 
         if (slashPercentages[service] == 0) {
@@ -77,8 +75,6 @@ abstract contract ERC20PartialWithdrawalsStrategy is BaseStrategy {
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
     /// @dev Triggered after `onUnstake` on the Service.
     function _onUnstake(address staker, uint256 service, uint256 amount) internal override {
-        require(msg.sender == stakingHub, "Only StakingHub can call this function.");
-
         // review only allow unstaking the same amount that you staked before.
         // we can avoid loops in the onUnstake hook this way!
 

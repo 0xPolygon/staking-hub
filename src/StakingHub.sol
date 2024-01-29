@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {IService} from "src/IService.sol";
-import {IStrategy} from "src/IStrategy.sol";
-import {Subscriptions, SubscriptionsStd} from "src/lib/SubscriptionsStd.sol";
+import {IService} from "./interface/IService.sol";
+import {IStrategy} from "./interface/IStrategy.sol";
+import {Subscriptions, SubscriptionsStd} from "./lib/SubscriptionsStd.sol";
 
 /// @title Polygon Hub
 /// @author Polygon Labs

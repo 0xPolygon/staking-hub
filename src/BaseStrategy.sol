@@ -45,6 +45,8 @@ abstract contract BaseStrategy is IStrategy {
         uint256 amount,
         uint8 maximumSlashingPercentage
     ) external override {
+        require(msg.sender == stakingHub, "Only StakingHub can call this function.");
+
         totalSupplies[service] += amount;
 
         _onRestake(staker, service, lockingInUntil, amount, maximumSlashingPercentage);
@@ -53,6 +55,8 @@ abstract contract BaseStrategy is IStrategy {
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
     /// @dev Triggered after `onUnstake` on the Service.
     function onUnstake(address staker, uint256 service, uint256 amount) external override {
+        require(msg.sender == stakingHub, "Only StakingHub can call this function.");
+
         totalSupplies[service] -= amount;
 
         _onUnstake(staker, service, amount);
