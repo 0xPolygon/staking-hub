@@ -1,5 +1,5 @@
 # IStrategy
-[Git Source](https://github.com/0xPolygon/staking-hub/blob/e29d25293d7b9a1ba3138152afe6282a955a9d28/src/interface/IStrategy.sol)
+[Git Source](https://github.com/0xPolygon/staking-hub/blob/5b471248dcbc23982e535fe2d6ff7caddf0f0f98/src/interface/IStrategy.sol)
 
 **Author:**
 Polygon Labs
@@ -10,30 +10,6 @@ A Staker deposits funds into the Strategy before subscribing to a Services that 
 
 
 ## Functions
-### deposit
-
-Adds funds to be available to a Staker for restaking.
-
-*Called by the Staker.*
-
-
-```solidity
-function deposit() external;
-```
-
-### withdraw
-
-Retrieves [all/a partion of] Staker's funds from the Strategy.
-
-The Staker must be unsubscribed from all Services first. // TODO: outdated
-
-*Called by the Staker.*
-
-
-```solidity
-function withdraw(uint256 amount) external;
-```
-
 ### onRestake
 
 *Triggered by the Hub when a Staker restakes to a Services that uses the Strategy.*
@@ -42,7 +18,7 @@ function withdraw(uint256 amount) external;
 
 
 ```solidity
-function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage) external;
+function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amount, uint8 maximumSlashingPercentage) external;
 ```
 
 ### onUnstake
@@ -53,7 +29,7 @@ function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint
 
 
 ```solidity
-function onUnstake(address staker, uint256 service) external;
+function onUnstake(address staker, uint256 service, uint256 amount) external;
 ```
 
 ### onSlash
@@ -64,7 +40,7 @@ Takes a portion of a Staker's funds away.
 
 
 ```solidity
-function onSlash(address staker, uint8 percentage) external;
+function onSlash(address staker, uint256 service, uint256 amount) external;
 ```
 
 ### balanceOf

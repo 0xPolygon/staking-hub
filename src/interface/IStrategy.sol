@@ -6,30 +6,19 @@ pragma solidity 0.8.23;
 /// @notice A Strategy holds and manages Stakers' funds.
 /// @notice A Staker deposits funds into the Strategy before subscribing to a Services that uses the Strategy.
 interface IStrategy {
-    // ========== ACTIONS ==========
-
-    /// @notice Adds funds to be available to a Staker for restaking.
-    /// @dev Called by the Staker.
-    function deposit() external;
-
-    /// @notice Retrieves [all/a partion of] Staker's funds from the Strategy.
-    /// @notice The Staker must be unsubscribed from all Services first. // TODO: outdated
-    /// @dev Called by the Staker.
-    function withdraw(uint256 amount) external;
-
     // ========== TRIGGERS ==========
 
     /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Strategy.
     /// @dev Triggered before `onRestake` on the Service.
-    function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage) external;
+    function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amount, uint8 maximumSlashingPercentage) external;
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
     /// @dev Triggered after `onUnstake` on the Service.
-    function onUnstake(address staker, uint256 service) external;
+    function onUnstake(address staker, uint256 service, uint256 amount) external;
 
     /// @notice Takes a portion of a Staker's funds away.
     /// @dev Called by the Hub when a Staker has been slashed by a Slasher of a Service that uses the Strategy.
-    function onSlash(address staker, uint8 percentage) external;
+    function onSlash(address staker, uint256 service, uint256 amount) external;
 
     // ========== QUERIES ==========
 

@@ -2,6 +2,7 @@
 - [Home](README.md)
 # src
   - [❱ example](src/example/README.md)
+    - [ERC20PartialWithdrawalsStrategy](src/example/ERC20PartialWithdrawalsStrategy.sol/abstract.ERC20PartialWithdrawalsStrategy.md)
     - [ISlasherExample](src/example/ISlasher.sol/interface.ISlasherExample.md)
   - [❱ interface](src/interface/README.md)
     - [ICounter](src/interface/ICounter.sol/interface.ICounter.md)

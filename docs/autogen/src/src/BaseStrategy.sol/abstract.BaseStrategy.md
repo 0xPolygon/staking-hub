@@ -1,5 +1,5 @@
 # BaseStrategy
-[Git Source](https://github.com/0xPolygon/staking-hub/blob/e29d25293d7b9a1ba3138152afe6282a955a9d28/src/BaseStrategy.sol)
+[Git Source](https://github.com/0xPolygon/staking-hub/blob/5b471248dcbc23982e535fe2d6ff7caddf0f0f98/src/BaseStrategy.sol)
 
 **Inherits:**
 [IStrategy](/src/interface/IStrategy.sol/interface.IStrategy.md)
@@ -20,42 +20,14 @@ address public stakingHub;
 ```
 
 
-### slashableAmount
+### totalSupplies
 
 ```solidity
-mapping(address => uint256) slashableAmount;
-```
-
-
-### slashPercentages
-
-```solidity
-mapping(uint256 service => uint8) slashPercentages;
-```
-
-
-### services
-
-```solidity
-mapping(uint256 => Service) services;
-```
-
-
-### highestStakeService
-
-```solidity
-uint256 highestStakeService;
+mapping(uint256 => uint256) totalSupplies;
 ```
 
 
 ## Functions
-### onlyStakingHub
-
-
-```solidity
-modifier onlyStakingHub();
-```
-
 ### constructor
 
 
@@ -63,55 +35,41 @@ modifier onlyStakingHub();
 constructor(address _stakingHub);
 ```
 
-### _balanceOf
-
-
-```solidity
-function _balanceOf(address staker) internal view virtual returns (uint256);
-```
-
-### _withdraw
-
-
-```solidity
-function _withdraw(uint256 amount) internal virtual;
-```
-
-### deposit
-
-
-```solidity
-function deposit() external virtual;
-```
-
-### onSlash
-
-
-```solidity
-function onSlash(address user, uint8 percentage) external virtual;
-```
-
-### withdraw
-
-
-```solidity
-function withdraw(uint256 amount) external;
-```
-
 ### balanceOf
 
 
 ```solidity
-function balanceOf(address staker) external view returns (uint256);
+function balanceOf(address staker) public view virtual returns (uint256);
 ```
 
-### _withdrawableAmount
-
-*returns amount of veTKN that can be withdrawn*
+### _onSlash
 
 
 ```solidity
-function _withdrawableAmount() private view returns (uint256 amount);
+function _onSlash(address user, uint256 service, uint256 amount) internal virtual;
+```
+
+### _onRestake
+
+
+```solidity
+function _onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage) internal virtual;
+```
+
+### _onUnstake
+
+
+```solidity
+function _onUnstake(address staker, uint256 service, uint256 amount) internal virtual;
+```
+
+### onSlash
+
+*Triggered by the Hub when a staker gets slashed on penalized*
+
+
+```solidity
+function onSlash(address user, uint256 service, uint256 amount) external;
 ```
 
 ### onRestake
@@ -122,10 +80,7 @@ function _withdrawableAmount() private view returns (uint256 amount);
 
 
 ```solidity
-function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage)
-    external
-    override
-    onlyStakingHub;
+function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amount, uint8 maximumSlashingPercentage) external override;
 ```
 
 ### onUnstake
@@ -136,25 +91,25 @@ function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint
 
 
 ```solidity
-function onUnstake(address staker, uint256 service) external override onlyStakingHub;
+function onUnstake(address staker, uint256 service, uint256 amount) external override;
 ```
 
-### updateHighestStake
-
+## Events
+### Staked
 
 ```solidity
-function updateHighestStake(uint256 service, uint256 totalStakedAmount) private;
+event Staked(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage);
 ```
 
-## Structs
-### Service
+### Unstaked
 
 ```solidity
-struct Service {
-    uint256 index;
-    uint256 left;
-    uint256 right;
-    uint256 amount;
-}
+event Unstaked(address staker, uint256 service);
+```
+
+### Slashed
+
+```solidity
+event Slashed(address staker, uint8 percentage);
 ```
 
