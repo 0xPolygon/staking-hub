@@ -10,7 +10,7 @@ import {IStrategy} from "./interface/IStrategy.sol";
 abstract contract BaseStrategy is IStrategy {
     address public stakingHub;
 
-    mapping(uint256 => uint256) totalSupplies;
+    mapping(uint256 => uint256) public totalSupplies;
 
     // events
     event Staked(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage);

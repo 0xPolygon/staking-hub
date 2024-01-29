@@ -1,5 +1,5 @@
 # BaseStrategy
-[Git Source](https://github.com/0xPolygon/staking-hub/blob/5b471248dcbc23982e535fe2d6ff7caddf0f0f98/src/BaseStrategy.sol)
+[Git Source](https://github.com/0xPolygon/staking-hub/blob/fb443185fbae2a7ae83cd84ec506f8b49910d7a6/src/BaseStrategy.sol)
 
 **Inherits:**
 [IStrategy](/src/interface/IStrategy.sol/interface.IStrategy.md)
@@ -23,7 +23,7 @@ address public stakingHub;
 ### totalSupplies
 
 ```solidity
-mapping(uint256 => uint256) totalSupplies;
+mapping(uint256 => uint256) public totalSupplies;
 ```
 
 
