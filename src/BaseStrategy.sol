@@ -13,7 +13,7 @@ abstract contract BaseStrategy is IStrategy {
     mapping(uint256 => uint256) public totalSupplies;
 
     // events
-    event Staked(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage);
+    event Staked(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage);
     event Unstaked(address staker, uint256 service);
     event Slashed(address staker, uint8 percentage);
 
@@ -23,17 +23,17 @@ abstract contract BaseStrategy is IStrategy {
 
     // FUNCTIONS TO IMPLEMENT
     function balanceOf(address staker) public view virtual returns (uint256);
-    function _onSlash(address user, uint256 service, uint256 amount) internal virtual;
-    function _onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage) internal virtual;
-    function _onUnstake(address staker, uint256 service, uint256 amount) internal virtual;
+    function _onSlash(address user, uint256 service, uint256 amountOrId) internal virtual;
+    function _onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage) internal virtual;
+    function _onUnstake(address staker, uint256 service, uint256 amountOrId) internal virtual;
 
     /// @dev Triggered by the Hub when a staker gets slashed on penalized
-    function onSlash(address user, uint256 service, uint256 amount) external {
+    function onSlash(address user, uint256 service, uint256 amountOrId) external {
         require(msg.sender == stakingHub, "Only StakingHub can call this function.");
 
-        totalSupplies[service] -= amount;
+        totalSupplies[service] -= amountOrId;
 
-        _onSlash(user, service, amount);
+        _onSlash(user, service, amountOrId);
     }
 
     /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Strategy.
@@ -42,23 +42,23 @@ abstract contract BaseStrategy is IStrategy {
         address staker,
         uint256 service,
         uint256 lockingInUntil, // review not required here, keep it?
-        uint256 amount,
+        uint256 amountOrId,
         uint8 maximumSlashingPercentage
     ) external override {
         require(msg.sender == stakingHub, "Only StakingHub can call this function.");
 
-        totalSupplies[service] += amount;
+        totalSupplies[service] += amountOrId;
 
-        _onRestake(staker, service, lockingInUntil, amount, maximumSlashingPercentage);
+        _onRestake(staker, service, lockingInUntil, amountOrId, maximumSlashingPercentage);
     }
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
     /// @dev Triggered after `onUnstake` on the Service.
-    function onUnstake(address staker, uint256 service, uint256 amount) external override {
+    function onUnstake(address staker, uint256 service, uint256 amountOrId) external override {
         require(msg.sender == stakingHub, "Only StakingHub can call this function.");
 
-        totalSupplies[service] -= amount;
+        totalSupplies[service] -= amountOrId;
 
-        _onUnstake(staker, service, amount);
+        _onUnstake(staker, service, amountOrId);
     }
 }

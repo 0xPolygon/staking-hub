@@ -1,5 +1,5 @@
 # BaseStrategy
-[Git Source](https://github.com/0xPolygon/staking-hub/blob/fb443185fbae2a7ae83cd84ec506f8b49910d7a6/src/BaseStrategy.sol)
+[Git Source](https://github.com/0xPolygon/staking-hub/blob/40ee450a1c3ec3de357aa9cf01be4ca37bff6da8/src/BaseStrategy.sol)
 
 **Inherits:**
 [IStrategy](/src/interface/IStrategy.sol/interface.IStrategy.md)
@@ -46,21 +46,21 @@ function balanceOf(address staker) public view virtual returns (uint256);
 
 
 ```solidity
-function _onSlash(address user, uint256 service, uint256 amount) internal virtual;
+function _onSlash(address user, uint256 service, uint256 amountOrId) internal virtual;
 ```
 
 ### _onRestake
 
 
 ```solidity
-function _onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage) internal virtual;
+function _onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage) internal virtual;
 ```
 
 ### _onUnstake
 
 
 ```solidity
-function _onUnstake(address staker, uint256 service, uint256 amount) internal virtual;
+function _onUnstake(address staker, uint256 service, uint256 amountOrId) internal virtual;
 ```
 
 ### onSlash
@@ -69,7 +69,7 @@ function _onUnstake(address staker, uint256 service, uint256 amount) internal vi
 
 
 ```solidity
-function onSlash(address user, uint256 service, uint256 amount) external;
+function onSlash(address user, uint256 service, uint256 amountOrId) external;
 ```
 
 ### onRestake
@@ -80,7 +80,7 @@ function onSlash(address user, uint256 service, uint256 amount) external;
 
 
 ```solidity
-function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amount, uint8 maximumSlashingPercentage) external override;
+function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage) external override;
 ```
 
 ### onUnstake
@@ -91,14 +91,14 @@ function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint
 
 
 ```solidity
-function onUnstake(address staker, uint256 service, uint256 amount) external override;
+function onUnstake(address staker, uint256 service, uint256 amountOrId) external override;
 ```
 
 ## Events
 ### Staked
 
 ```solidity
-event Staked(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage);
+event Staked(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage);
 ```
 
 ### Unstaked

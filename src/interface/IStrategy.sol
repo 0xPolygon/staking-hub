@@ -10,15 +10,15 @@ interface IStrategy {
 
     /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Strategy.
     /// @dev Triggered before `onRestake` on the Service.
-    function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amount, uint8 maximumSlashingPercentage) external;
+    function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage) external;
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
     /// @dev Triggered after `onUnstake` on the Service.
-    function onUnstake(address staker, uint256 service, uint256 amount) external;
+    function onUnstake(address staker, uint256 service, uint256 amountOrId) external;
 
     /// @notice Takes a portion of a Staker's funds away.
     /// @dev Called by the Hub when a Staker has been slashed by a Slasher of a Service that uses the Strategy.
-    function onSlash(address staker, uint256 service, uint256 amount) external;
+    function onSlash(address staker, uint256 service, uint256 amountOrId) external;
 
     // ========== QUERIES ==========
 

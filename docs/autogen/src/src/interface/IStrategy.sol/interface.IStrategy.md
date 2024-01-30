@@ -1,5 +1,5 @@
 # IStrategy
-[Git Source](https://github.com/0xPolygon/staking-hub/blob/5b471248dcbc23982e535fe2d6ff7caddf0f0f98/src/interface/IStrategy.sol)
+[Git Source](https://github.com/0xPolygon/staking-hub/blob/40ee450a1c3ec3de357aa9cf01be4ca37bff6da8/src/interface/IStrategy.sol)
 
 **Author:**
 Polygon Labs
@@ -18,7 +18,7 @@ A Staker deposits funds into the Strategy before subscribing to a Services that 
 
 
 ```solidity
-function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amount, uint8 maximumSlashingPercentage) external;
+function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage) external;
 ```
 
 ### onUnstake
@@ -29,7 +29,7 @@ function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint
 
 
 ```solidity
-function onUnstake(address staker, uint256 service, uint256 amount) external;
+function onUnstake(address staker, uint256 service, uint256 amountOrId) external;
 ```
 
 ### onSlash
@@ -40,7 +40,7 @@ Takes a portion of a Staker's funds away.
 
 
 ```solidity
-function onSlash(address staker, uint256 service, uint256 amount) external;
+function onSlash(address staker, uint256 service, uint256 amountOrId) external;
 ```
 
 ### balanceOf
