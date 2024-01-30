@@ -69,7 +69,7 @@ abstract contract ERC20PartialWithdrawalsStrategy is BaseStrategy {
 
         updateHighestStake(service, totalStakedAmount);
 
-        require(slashableAmount[staker] <= balanceOf(staker), "BaseStrategy: Slashable amount too high.");
+        require(slashableAmount[staker] <= balanceOf(staker), "ERC20PartialWithdrawalsStrategy: Slashable amount too high.");
     }
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.

@@ -13,9 +13,9 @@ abstract contract BaseStrategy is IStrategy {
     mapping(uint256 => uint256) public totalSupplies;
 
     // events
-    event Staked(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage);
-    event Unstaked(address staker, uint256 service);
-    event Slashed(address staker, uint8 percentage);
+    event Restaked(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage);
+    event Unstaked(address staker, uint256 service, uint256 amountOrId);
+    event Slashed(address staker, uint256 amountOrId);
 
     constructor(address _stakingHub) {
         stakingHub = _stakingHub;
@@ -34,6 +34,7 @@ abstract contract BaseStrategy is IStrategy {
         totalSupplies[service] -= amountOrId;
 
         _onSlash(user, service, amountOrId);
+        emit Slashed(user, amountOrId);
     }
 
     /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Strategy.
@@ -50,6 +51,7 @@ abstract contract BaseStrategy is IStrategy {
         totalSupplies[service] += amountOrId;
 
         _onRestake(staker, service, lockingInUntil, amountOrId, maximumSlashingPercentage);
+        emit Restaked(staker, service, lockingInUntil, amountOrId, maximumSlashingPercentage);
     }
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
@@ -60,5 +62,6 @@ abstract contract BaseStrategy is IStrategy {
         totalSupplies[service] -= amountOrId;
 
         _onUnstake(staker, service, amountOrId);
+        emit Unstaked(staker, service, amountOrId);
     }
 }
