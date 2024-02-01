@@ -9,17 +9,17 @@ import {Subscriptions, SubscriptionsStd} from "./lib/SubscriptionsStd.sol";
 /// @author Polygon Labs
 /// @notice The Hub is a permissionless place where Stakers and Services gather.
 /// @notice The goal is to create new income streams for Stakers. Meanwhile, Services can acquire Stakers.
-/// @notice Stakers can subscribe to Services (i.e., restake) via Strategies.
+/// @notice Stakers can subscribe to Services by restaking via Strategies.
 contract Hub {
     // ========== DATA TYPES ==========
 
     using SubscriptionsStd for Subscriptions;
 
-    // Review: Do we want to allow the Service to update strategies?
+    // Review: Do we want to allow Services to update thier `strategies`?
     struct ServiceData {
         IService service;
         uint256[] strategies;
-        mapping(uint256 strategyId => uint256 percentage) maximumSlashingPercentages;
+        mapping(uint256 strategyId => uint8 percentage) maximumSlashingPercentages;
         address slasher;
     }
 
@@ -35,18 +35,17 @@ contract Hub {
 
     struct SlashingInput {
         uint256 strategyId;
-        uint256 percentage;
+        uint8 percentage;
     }
 
     // ========== PARAMETERS ==========
 
-    // Note: Placeholders.
+    // TODO: Those are placeholders.
     uint256 private constant SLASHER_UPDATE_TIMELOCK = 7 days;
     uint256 private constant STAKER_FREEZE_PERIOD = 7 days;
 
     // ========== INTERNAL RECORDS ==========
 
-    // Review: Should we use IDs or just addresses? The latter is more gas efficient. Otherwise, we may want to record addresses instead of IDs for stuff like what Strategies a Services uses, so we don't have to look them up in for loops in functions such as subscribe.
     uint256 private _strategyCounter;
     uint256 private _serviceCounter;
 
@@ -68,7 +67,7 @@ contract Hub {
 
     event StrategyRegistered(address indexed strategy, uint256 indexed strategyId);
     event ServiceRegistered(address indexed service, uint256 indexed serviceId);
-    event SlasherUpdateInitiated(uint256 indexed serviceId, address newSlasher);
+    event SlasherUpdateInitiated(uint256 indexed serviceId, address indexed newSlasher);
 
     // ========== ACTIONS ==========
 
@@ -119,85 +118,93 @@ contract Hub {
         emit ServiceRegistered(msg.sender, id);
     }
 
-    // Review: Does extending a subscription make sense with the active/locked-in separation? Extending a subscription would mean extending the time the Staker is locked-in with the Service because all subscriptions remain active until the Staker unsubscribes.
-    // Answer: Yes, extend the lock in period.
-    // Note: Subscription auto-renewals (where a Service can call subscribe on behalf of a Staker) aren't supported.
-    /// @notice Subscribes a Staker to a Service.
-    /// @notice Extends the lock-in period if the Staker is already subscribed to the Service.
-    /// @notice By restaking, the Staker subscribes to the Service, subject to that Service's contract logic.
+    // Review: See `unstake` review.
+    /// @notice Lets a Staker reuse funds they have previously deposited into Strategies used by a Service to increase their stake in that Service.
+    /// @notice By restaking, the Staker becomes subscribed to the Service, subject to the terms of the Service.
+    /// @notice Restaking may increase the Staker's commitment to the Service if the Staker is already subscribed to the Service. This depends on the `commitUntil` parameter.
+    /// @param commitUntil Use `0` to indicate no change in commitment. `commitUntil` will be resolved to a value before further processing.
     /// @dev Called by the Staker.
-    /// @dev Calls `onSubscribe` on all Strategies the Service uses.
-    /// @dev Calls `onSubscribe` on the Service.
-    function restake(uint256 serviceId, uint256 lockInUntil) external {
+    /// @dev Triggers `onRestake` on all Strategies the Service uses.
+    /// @dev Triggers `onRestake` on the Service.
+    function restake(uint256 amountOrId, uint256 serviceId, uint256 commitUntil) external {
+        require(amountOrId != 0, "Invalid amount or ID");
         require(serviceId <= _serviceCounter, "Invalid Service");
-        require(lockInUntil == 0 || lockInUntil > block.timestamp, "Invalid lock-in");
+        require(commitUntil == 0 || commitUntil > block.timestamp, "Invalid commitment");
         require(
-            !subscriptions[msg.sender].isActive(serviceId) || lockInUntil > subscriptions[msg.sender].getUnlock(serviceId), "Existing subscription not extended"
-        ); // review
+            !subscriptions[msg.sender].exists(serviceId) || commitUntil > subscriptions[msg.sender].viewCommitment(serviceId), "Commitment cannot be decreased"
+        );
 
-        // Activate a new subscription or extend the lock-in period of the existing one.
-        subscriptions[msg.sender].track(serviceId, lockInUntil); // review
-
-        // Alert the Strategies that the Staker has subscribed.
-        // Reverting not allowed.
-        // Note: We assume the Service trusts the Strategies to not revert by causing the call to run out of gas.
-        for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
-            uint256 strategyId = serviceData[serviceId].strategies[i];
-            uint256 maximumSlashingPercentage = serviceData[serviceId].maximumSlashingPercentages[strategyId];
-            try strategyData[strategyId].strategy.onRestake(msg.sender, serviceId, lockInUntil, maximumSlashingPercentage) {} catch {}
+        // Resolve `commitUntil`.
+        if (subscriptions[msg.sender].exists(serviceId)) {
+            commitUntil = commitUntil != 0 ? commitUntil : subscriptions[msg.sender].viewCommitment(serviceId);
         }
 
-        // Confirm the subscription with the Service.
+        // Notify the Strategies that the Staker is restaking.
+        // Reverting not allowed.
+        // Note: We assume the Service trusts the Strategies not to revert by causing the call to run out of gas.
+        for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
+            uint256 strategyId = serviceData[serviceId].strategies[i];
+            uint8 maximumSlashingPercentage = serviceData[serviceId].maximumSlashingPercentages[strategyId];
+            try strategyData[strategyId].strategy.onRestake(msg.sender, amountOrId, serviceId, commitUntil, maximumSlashingPercentage) {} catch {}
+        }
+
+        // Confirm the restaking with the Service.
         // The Service can revert.
-        serviceData[serviceId].service.onSubscribe(msg.sender, lockInUntil);
+        serviceData[serviceId].service.onRestake(msg.sender, amountOrId, commitUntil);
+
+        // Activate a new subscription or extend the lock-in period of the existing one.
+        subscriptions[msg.sender].track(serviceId, commitUntil);
     }
 
-    // Review: Should a Service be able to unusubscribe a Staker?
-    // Answer: Yes. at any moment
-    // What about auto-renewals? In that case the Staker needs to initiate unsubscription *before* the lock-in expires. See the review for `onFreeze`.
-    // Answer: no, see above
-    // TODO: Announce if after lockin (return true/false) [or always init OR perhaps force]. Keep freezing in mind after annoucing. Also the case of slasher update - this needs to be quicker
-    /// @notice Unsubscribes a Staker from a Service.
-    /// @notice Let's the Staker unsubscribe immediately if the Service has scheduled a Slasher update.
-    /// @notice By unstaking completely, the Staker unsubscribes from the Service, subject to that Service's contract logic.
+    // Review: Since we’re specifying the amount or ID to be unstaked, doesn’t the Staker also need to specify from which Strategy? Logically, yes - how else would they know what a random number means?
+    // Review: Perhaps leave it to the Service to interpret and trigger Strategies? But this mean giving up the control to the Service.
+    // Review: This also means the Staker would need to unstake via Strategies individualy. Add `unstakeAll` helper - however the case when the Staker unsubscribes by manually doing `unstake` also needs to be taken into account.
+    // Review: Moreover, that'd also mean we need the Staker to specify the Strategy when restaking.
+    // TODO: Init/fin: Announce if unsubscribing after committment ended (return true/false) [or always init OR perhaps force]. Important: Keep freezing in mind after annoucing. Also the case of slasher update - this needs to be resolved quicker.
+    /// @notice Lets a Staker decrease their stake in a Service.
+    /// @notice By unstaking the remaing amount of the stake, the Staker becomes unsubscribed from the Service, subject to the terms of the Service.
+    /// @notice Lets the Staker decrease their stake immediately if the Service has scheduled a Slasher update.
+    /// @param amountOrId Use `2**256 - 1` (`type(uint256).max`) to unstake the remaing amount of the stake.
     /// @dev Called by the Staker.
-    /// @dev Calls `onSubscribe` on the Service.
-    /// @dev Calls `onSubscribe` on all Strategies the Service uses.
-    function unstake(uint256 serviceId) external {
+    /// @dev Triggers `onUnstake` on the Service.
+    /// @dev Triggers `onUnstake` on all Strategies the Service uses.
+    function unstake(uint256 serviceId, uint256 amountOrId) external {
         require(serviceId <= _serviceCounter, "Invalid service");
-        require(subscriptions[msg.sender].isActive(serviceId), "Not subscribed");
-        require(!subscriptions[msg.sender].isFrozen(serviceId), "Cannot unsubscribe while frozen");
+        require(subscriptions[msg.sender].exists(serviceId), "Not subscribed");
+        require(!subscriptions[msg.sender].isFrozen(), "Cannot unstake while frozen");
 
         // Let the Staker unsubscribe if the Service has scheduled a Slasher update.
         // Reverting not allowed.
-        // Note: We assume the Staker trusts the Service to not revert by causing the call to run out of gas.
+        // Note: We assume the Staker trusts the Service not to revert by causing the call to run out of gas.
         if (slasherUpdate[serviceId].newSlasher != address(0)) {
-            try serviceData[serviceId].service.onUnsubscribe(msg.sender) {} catch {}
+            try serviceData[serviceId].service.onUnstake(msg.sender, amountOrId) {} catch {}
         } else {
-            // Confirm the unsubscription with the Service if the Staker is still locked-in.
+            // Confirm the unsubscription with the Service if the Staker is still committed.
             // The Service can revert.
-            if (subscriptions[msg.sender].isLockedIn(serviceId)) {
-                serviceData[serviceId].service.onUnsubscribe(msg.sender);
+            if (subscriptions[msg.sender].isCommitted(serviceId)) {
+                serviceData[serviceId].service.onUnstake(msg.sender, amountOrId);
             } else {
-                // Let the Staker unsubscribe if the Staker is no longer locked-in.
-                // Alert the Service that the Staker has unsubscribed.
+                // Let the Staker unsubscribe if the Staker is no longer committed.
+                // Notify the Service that the Staker has unsubscribed.
                 // Reverting not allowed.
-                // Note: We assume the Staker trusts the Service to not revert by causing the call to run out of gas.
-                try serviceData[serviceId].service.onUnsubscribe(msg.sender) {} catch {}
+                // Note: We assume the Staker trusts the Service not to revert by causing the call to run out of gas.
+                try serviceData[serviceId].service.onUnstake(msg.sender, amountOrId) {} catch {}
             }
         }
 
-        // Alert the Strategies that the Staker has unsubscribed.
+        // Notify the Strategies that the Staker has unsubscribed.
         // Reverting not allowed.
-        // Note: We assume the Staker trust the Strategies to not revert by causing the call to run out of gas.
+        // Note: We assume the Staker trust the Strategies not to revert by causing the call to run out of gas.
         for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
             uint256 strategyId = serviceData[serviceId].strategies[i];
-            try strategyData[strategyId].strategy.onUnstake(msg.sender, serviceId) {} catch {}
+            try strategyData[strategyId].strategy.onUnstake(msg.sender, serviceId, amountOrId) {} catch {}
         }
 
         // Deactivate the subscription.
-        subscriptions[msg.sender].stopTracking(serviceId);
+        if (amountOrId == type(uint256).max || ) subscriptions[msg.sender].stopTracking(serviceId);
     }
+
+    // NOTE!!! Updated code up to this line. Some logic and docs below may be outdated! TODO
 
     /// @notice Schedule a Slasher update for a Service.
     /// @dev Called by the Service.
@@ -231,8 +238,6 @@ contract Hub {
 
     // ========== TRIGGERS ==========
 
-    // Review: We need to think about freezing edge-cases. For example, if a subscriptions auto-renews, but the Staker is frozen at a time when it's too late for them to unsubscribe. See the review for `unsubscribe`.
-    // Answer: this edge case is not possible because there are no auto-renewals.
     /// @notice Temporarily prevents a Staker from unsubscribing from a Service.
     /// @notice This period can be used to prove the Staker should be slashed.
     /// @dev Called by a Slasher of the Service.
@@ -240,11 +245,12 @@ contract Hub {
         require(msg.sender == serviceData[serviceId].slasher, "Only Slasher can freeze");
 
         // Note: We assume the Staker trusts the Service not to freeze them repeatedly.
-        subscriptions[msg.sender].freeze(serviceId, block.timestamp + STAKER_FREEZE_PERIOD);
+        subscriptions[staker].freeze(serviceId, block.timestamp + STAKER_FREEZE_PERIOD);
 
-        // Alert the Services that the Staker has been frozen.
+        // Notify the Services that the Staker has been frozen.
         // Reverting not allowed.
-        // TODO: We assume the Slasher trusts the Staker to not revert by causing the call to run out of gas. (!!!)
+        // TODO: We assume the Slasher trusts the Staker not to revert by causing the call to run out of gas. (!!!)
+        // Answer: EVENT ONLY. Just an event for the adjustment requirement too (slashing)?
         uint256 currentServiceId = subscriptions[msg.sender].head;
         while (currentServiceId != 0) {
             try serviceData[currentServiceId].service.onFreeze(staker) {} catch {}
@@ -256,20 +262,19 @@ contract Hub {
     /// @notice The Staker must be frozen first.
     /// @dev Called by a Slasher of a Service.
     /// @dev Calls onSlash on all Strategies the Services uses.
+    // TODO Aggregation (see the new [private/not on GH] Note + make sure to clear all freezes)
     function onSlash(uint256 serviceId, address staker, SlashingInput[] calldata percentages) external {
         require(msg.sender == serviceData[serviceId].slasher, "Only Slasher can slash");
-        require(subscriptions[staker].isFrozen(serviceId), "Staker not frozen");
+        require(subscriptions[staker].isFrozen(), "Staker not frozen");
         // TODO Do not allow duplicates. Do not allow Strategies not used.
         for (uint256 i; i < percentages.length; ++i) {
             SlashingInput calldata percentage = percentages[i];
-            require(
-                percentage.percentage <= serviceData[serviceId].maximumSlashingPercentages[percentage.strategyId], "Slashing percentage exceeds the maximum"
-            );
+            require(percentage.percentage <= serviceData[serviceId].maximumSlashingPercentages[percentage.strategyId], "Slashing percentage exceeds maximum");
         }
 
-        // Alert all Strategies used by the Service that the Staker has been slashed.
+        // Notify all Strategies used by the Service that the Staker has been slashed.
         // Reverting not allowed.
-        // TODO: We assume the Slasher trusts the Staker to not revert by causing the call to run out of gas. (!!!)
+        // TODO: We assume the Service trusts the Strategies not to revert by causing the call to run out of gas.
         for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
             uint256 strategyId = serviceData[serviceId].strategies[i];
             uint256 percentage;
@@ -287,11 +292,27 @@ contract Hub {
         subscriptions[staker].unfreeze(serviceId);
     }
 
-    // ========== QUERIES ==========
-
-    function hasActiveSubscriptions(address staker) external view returns (bool) {
-        return subscriptions[staker].head != 0;
+    // Review: Should a Service be able to unusubscribe a Staker?
+    // Answer: Yes. at any moment
+    /// @notice Ends a Staker's subscription with a Service.
+    /// @dev Called by the Service.
+    function unsubscribe(address staker) external {
+        // TODO
     }
 
-    // Review: What endpoints are needed? For example: isSubscribed(staker) returns (isActive, isLockedIn)
+    // ========== QUERIES ==========
+
+    /// @notice Tells if a Staker has active subscriptions.
+    function hasSubscriptions(address staker) external view returns (bool) {
+        return subscriptions[staker].hasSubscriptions();
+    }
+
+    /// @return exists Whether the Staker already has stake with the Service.
+    /// @return committedUntil `0` if `exists` is `false`.
+    function viewSubscription(address staker, uint256 serviceId) external view returns (bool exists, uint256 committedUntil) {
+        exists = subscriptions[staker].exists(serviceId);
+        committedUntil = exists ? subscriptions[staker].viewCommittment(serviceId) : 0;
+    }
 }
+
+// Review: Need to think about what happens if, for example, a Strategy also registers as a Service that uses itself (the Strategy), and then subscribes to iteself, etc. If problematic, do not allow this.

@@ -3,11 +3,11 @@ pragma solidity 0.8.23;
 
 import {IStrategy} from "./interface/IStrategy.sol";
 
-/// @title BaseStrategy
+/// @title Strategy
 /// @author Polygon Labs
 /// @notice A Strategy holds and manages Stakers' funds.
 /// @notice A Staker deposits funds into the Strategy before subscribing to a Services that uses the Strategy.
-abstract contract BaseStrategy is IStrategy {
+abstract contract Strategy is IStrategy {
     address public stakingHub;
 
     mapping(uint256 => uint256) public totalSupplies;

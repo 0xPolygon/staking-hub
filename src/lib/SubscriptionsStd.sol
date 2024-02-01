@@ -4,7 +4,7 @@ pragma solidity ^0.8.23;
 /// @dev The single-linked list data-type for tracking subscriptions.
 struct Subscriptions {
     uint256 head;
-    mapping(uint256 => SubscriptionsStd.Item) items;
+    mapping(uint256 service => SubscriptionsStd.Details details) items;
 }
 
 // TODO Update docs.
@@ -18,96 +18,106 @@ library SubscriptionsStd {
     // ========== DATA TYPES ==========
 
     // Review: Is it more gas-efficient to use doubly-linked list? For example, `stopTracking` won't need to iterate over items.
-    struct Item {
-        bool active;
-        uint256 lockedInUntil;
-        uint256 lastFreezeEnd;
+    struct Details {
+        bool exists;
+        uint256 committedUntil;
+        uint256 lastFreezingEnd;
         uint256 next;
     }
 
     // ========== ACTIONS ==========
 
     /// @notice Starts tracking a new subscription, or updates the lock-in period of the subscription that is already being tracked.
-    function track(Subscriptions storage list, uint256 service, uint256 lockInUntil) public {
+    function track(Subscriptions storage self, uint256 service, uint256 commitUntil) public {
         assert(service != 0);
 
         // Track a new subscription.
-        if (!isActive(list, service)) {
-            list.items[service] = Item(true, lockInUntil, 0, list.head);
-            list.head = service;
+        if (!exists(self, service)) {
+            self.items[service] = Details(true, commitUntil, 0, self.head);
+            self.head = service;
         } else {
             // Update the lock-in period.
-            list.items[service].lockedInUntil = lockInUntil;
+            self.items[service].committedUntil = commitUntil;
         }
     }
 
     /// @notice Stops tracking a subscription.
-    function stopTracking(Subscriptions storage list, uint256 service) public {
-        assert(isActive(list, service));
+    function stopTracking(Subscriptions storage self, uint256 service) public {
+        assert(exists(self, service));
 
-        if (list.head == service) {
-            list.head = list.items[list.head].next;
-            delete list.items[service];
+        if (self.head == service) {
+            self.head = self.items[self.head].next;
+            delete self.items[service];
             return;
         }
 
-        uint256 current = list.head;
-        while (list.items[current].next != 0) {
-            if (list.items[current].next == service) {
-                list.items[current].next = list.items[list.items[current].next].next;
-                delete list.items[service];
+        uint256 current = self.head;
+        while (self.items[current].next != 0) {
+            if (self.items[current].next == service) {
+                self.items[current].next = self.items[self.items[current].next].next;
+                delete self.items[service];
                 return;
             }
-            current = list.items[current].next;
+            current = self.items[current].next;
         }
     }
 
     /// @notice Sets the end of the freeze period of a subscription that is already being tracked.
-    function freeze(Subscriptions storage list, uint256 service, uint256 newFreezeEnd) public {
-        assert(isActive(list, service));
-        assert(newFreezeEnd > list.items[service].lastFreezeEnd);
+    function freeze(Subscriptions storage self, uint256 service, uint256 newFreezeEnd) public {
+        assert(exists(self, service));
+        assert(newFreezeEnd > self.items[service].lastFreezingEnd);
 
-        list.items[service].lastFreezeEnd = newFreezeEnd;
+        self.items[service].lastFreezingEnd = newFreezeEnd;
     }
 
     /// @notice Resets the end of the freeze period of a subscription that is already being tracked.
-    function unfreeze(Subscriptions storage list, uint256 service) public {
-        assert(isActive(list, service));
+    function unfreeze(Subscriptions storage self, uint256 service) public {
+        assert(exists(self, service));
 
-        list.items[service].lastFreezeEnd = 0;
+        self.items[service].lastFreezingEnd = 0;
     }
 
     // ========== QUERIES ==========
 
-    /// @return Whether a subscription is active.
-    function isActive(Subscriptions storage list, uint256 service) public view returns (bool) {
-        return list.items[service].active;
+    function hasSubscriptions(Subscriptions storage self) public view returns (bool) {
+        return self.head != 0;
     }
 
-    // Review: Is `isActive` check needed?
     /// @return Whether a subscription is active.
-    function isLockedIn(Subscriptions storage list, uint256 service) public view returns (bool) {
-        return block.timestamp < list.items[service].lockedInUntil;
+    function exists(Subscriptions storage self, uint256 service) public view returns (bool) {
+        return self.items[service].exists;
+    }
+
+    /// @return Whether a subscription is active.
+    function isCommitted(Subscriptions storage self, uint256 service) public view returns (bool) {
+        assert(exists(self, service));
+
+        return block.timestamp < self.items[service].committedUntil;
     }
 
     /// @return Whether the Staker is frozen.
-    function isFrozen(Subscriptions storage list, uint256 service) public view returns (bool) {
-        return block.timestamp < list.items[service].lastFreezeEnd;
+    function isFrozen(Subscriptions storage self) public view returns (bool) {
+        uint256 currentServiceId = self.head;
+        while (currentServiceId != 0) {
+            if (block.timestamp < self.items[currentServiceId].lastFreezingEnd) return true;
+            currentServiceId = iterate(self, currentServiceId);
+        }
+
+        return false;
     }
 
-    // TODO: Remove this function if not needed.
-    function getUnlock(Subscriptions storage list, uint256 service) public view returns (uint256) {
-        assert(isActive(list, service));
+    function viewCommitment(Subscriptions storage self, uint256 service) public view returns (uint256) {
+        assert(exists(self, service));
 
-        return list.items[service].lockedInUntil;
+        return self.items[service].committedUntil;
     }
 
     // ========== UTILITIES ==========
 
     /// @dev Use to get the next subscription from the linked list.
-    function iterate(Subscriptions storage list, uint256 service) public view returns (uint256) {
-        assert(isActive(list, service));
+    function iterate(Subscriptions storage self, uint256 service) public view returns (uint256) {
+        assert(exists(self, service));
 
-        return list.items[service].next;
+        return self.items[service].next;
     }
 }

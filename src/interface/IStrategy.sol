@@ -10,7 +10,7 @@ interface IStrategy {
 
     /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Strategy.
     /// @dev Triggered before `onRestake` on the Service.
-    function onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 amountOrId, uint8 maximumSlashingPercentage) external;
+    function onRestake(address staker, uint256 service, uint256 amountOrId, uint256 committingUntil, uint8 maximumSlashingPercentage) external;
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
     /// @dev Triggered after `onUnstake` on the Service.
@@ -24,4 +24,7 @@ interface IStrategy {
 
     /// @return The amount of funds the Staker has in the Strategy.
     function balanceOf(address staker) external view returns (uint256);
+
+    /// @return The amount of funds from the Strategy the Staker has staked with a Service.
+    function restakedTo(address staker, uint256 service) external view returns (uint256);
 }
