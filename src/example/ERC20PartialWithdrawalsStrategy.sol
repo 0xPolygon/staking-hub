@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {BaseStrategy} from "../BaseStrategy.sol";
+import {Strategy} from "../Strategy.sol";
 
 /// @title ERC20PartialWithdrawalsStrategy
 /// @author Polygon Labs
-/// @notice An ERC20-compatible abstract template contract inheriting from BaseStrategy
+/// @notice An ERC20-compatible abstract template contract inheriting from Strategy
 /// @notice Enables partial withdrawals by tracking slashing risk
-abstract contract ERC20PartialWithdrawalsStrategy is BaseStrategy {
+abstract contract ERC20PartialWithdrawalsStrategy is Strategy {
     // TODO add tracking onSlash?
 
     mapping(address => uint256) slashableAmount;
@@ -22,10 +22,10 @@ abstract contract ERC20PartialWithdrawalsStrategy is BaseStrategy {
         uint256 amount;
     }
 
-    constructor(address _stakingHub) BaseStrategy(_stakingHub) {}
+    constructor(address _stakingHub) Strategy(_stakingHub) {}
 
     // FUNCTIONS TO IMPLEMENT
-    // more in BaseStrategy
+    // more in Strategy
     function _withdraw(uint256 amount) internal virtual;
 
     function withdraw(uint256 amount) external virtual {

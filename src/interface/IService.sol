@@ -2,7 +2,7 @@
 pragma solidity 0.8.23;
 
 // TODO Update docs.
-/// @title Service
+/// @title IService
 /// @author Polygon Labs
 /// @notice A Service represents a network.
 /// @notice Stakers can subscribe to the Service by restaking.
