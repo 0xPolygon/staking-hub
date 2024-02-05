@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.23;
 
+// TODO Ditch the list and change to deterministic tracking with a counter.
+
 /// @dev The single-linked list data-type for tracking subscriptions.
 struct Subscriptions {
     uint256 head;
@@ -17,7 +19,6 @@ struct Subscriptions {
 library SubscriptionsStd {
     // ========== DATA TYPES ==========
 
-    // Review: Is it more gas-efficient to use doubly-linked list? For example, `stopTracking` won't need to iterate over items.
     struct Details {
         bool exists;
         uint256 committedUntil;
