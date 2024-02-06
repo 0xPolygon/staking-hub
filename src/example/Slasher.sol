@@ -61,7 +61,7 @@ contract Slasher is ISlasher {
 
         delete gracePeriodEnds[staker];
 
-        Hub.SlashingInput memory slashingInputs = Hub.SlashingInput({strategyId: 1, percentage: percentage});
+        Hub.SlashingInput memory slashingInputs = Hub.SlashingInput({lockerId: 1, percentage: percentage});
 
         Hub.SlashingInput[] memory input = new Hub.SlashingInput[](1);
         input[0] = slashingInputs;

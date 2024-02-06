@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Strategy} from "../template/Strategy.sol";
+import {Locker} from "../template/Locker.sol";
 
-/// @title ERC20PartialWithdrawalsStrategy
+/// @title ERC20PartialWithdrawalsLocker
 /// @author Polygon Labs
-/// @notice An ERC20-compatible abstract template contract inheriting from Strategy
+/// @notice An ERC20-compatible abstract template contract inheriting from Locker
 /// @notice Enables partial withdrawals by tracking slashing risk
-abstract contract ERC20PartialWithdrawalsStrategy is Strategy {
+abstract contract ERC20PartialWithdrawalsLocker is Locker {
     // TODO add tracking onSlash?
 
     mapping(address => uint256) slashableAmount;
@@ -22,14 +22,14 @@ abstract contract ERC20PartialWithdrawalsStrategy is Strategy {
         uint256 amount;
     }
 
-    constructor(address _stakingHub) Strategy(_stakingHub) {}
+    constructor(address _stakingHub) Locker(_stakingHub) {}
 
     // FUNCTIONS TO IMPLEMENT
-    // more in Strategy
+    // more in Locker
     function _withdraw(uint256 amount) internal virtual;
 
     function withdraw(uint256 amount) external virtual {
-        require(_withdrawableAmount() >= amount, "ERC20PartialWithdrawalsStrategy: amount exceeds withdrawable amount");
+        require(_withdrawableAmount() >= amount, "ERC20PartialWithdrawalsLocker: amount exceeds withdrawable amount");
         _withdraw(amount);
     }
 
@@ -42,7 +42,7 @@ abstract contract ERC20PartialWithdrawalsStrategy is Strategy {
         return balanceOf(msg.sender) - highestStake >= slashable ? highestStake : slashable;
     }
 
-    /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Strategy.
+    /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Locker.
     /// @dev Triggered before `onRestake` on the Service.
     function _onRestake(
         address staker,
@@ -69,10 +69,10 @@ abstract contract ERC20PartialWithdrawalsStrategy is Strategy {
 
         updateHighestStake(service, totalStakedAmount);
 
-        require(slashableAmount[staker] <= balanceOf(staker), "ERC20PartialWithdrawalsStrategy: Slashable amount too high.");
+        require(slashableAmount[staker] <= balanceOf(staker), "ERC20PartialWithdrawalsLocker: Slashable amount too high.");
     }
 
-    /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
+    /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
     /// @dev Triggered after `onUnstake` on the Service.
     function _onUnstake(address staker, uint256 service, uint256 amount) internal override {
         // review only allow unstaking the same amount that you staked before.
