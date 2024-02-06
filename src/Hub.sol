@@ -246,7 +246,7 @@ contract Hub {
         serviceData[serviceId].slasher = update.newSlasher;
         serviceData[serviceId].lastSlasherUpdate = block.timestamp;
 
-        delete update;
+        delete slasherUpdates[serviceId];
     }
 
     // ========== TRIGGERS ==========
