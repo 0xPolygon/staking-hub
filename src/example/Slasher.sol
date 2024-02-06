@@ -8,65 +8,69 @@ import {Hub} from "../StakingHub.sol";
 /// @author Polygon Labs
 /// @notice A Slasher separates the freezing and slashing functionality from a Service.
 contract Slasher is ISlasher {
-    // TODO insert actual addresses
-    address _service = address(0);
-    uint256 serviceID = 0;
-    Hub hub = Hub(address(0));
+    address immutable service;
+    uint256 immutable serviceId;
+    Hub immutable hub;
 
     /// @notice amount of time the staker has to prove their innocence.
-    uint256 public GRACE_PERIOD = 4 days;
-    uint256 index = 0;
+    uint256 public constant GRACE_PERIOD = 4 days;
 
-    struct SlashItem {
-        uint256 slashId;
-        uint256 service;
-        uint256 staker;
-        uint8 percentage;
-        uint256 gracePeriodEnd;
+    mapping(address => uint256) public gracePeriodEnds;
+
+    constructor(Hub hub_) {
+        // deployed by service in this example
+        hub = hub_;
+        service = msg.sender;
+        serviceId = hub_.services(msg.sender);
     }
 
-    mapping(uint256 => SlashItem) public slashItems;
-    mapping(address => uint256) private slashCounter;
+    function freeze(address staker, bytes calldata proof) public {
+        require(msg.sender == service, "Slasher: Only Service ");
 
-    function freeze(address staker, uint8 percentage) public {
-        require(msg.sender == _service, "Slasher: Only Service ");
+        _verifyProof(staker, proof);
 
-        slashItems[index] = SlashItem(index, _service, staker, percentage, block.timestamp + GRACE_PERIOD);
-        index++;
-        slashCounter[staker]++;
+        gracePeriodEnds[staker] = block.timestamp + GRACE_PERIOD;
 
-        hub.onFreeze(staker, serviceId);
+        hub.onFreeze(serviceId, staker);
     }
 
-    function unfreeze(address staker, uint256 slashId) public {
-        require(msg.sender == _service, "Slasher: Only Service ");
-        require(slashItems[slashId].staker == staker, "Slasher: Wrong Staker ");
+    function unfreeze(address staker) public {
+        require(msg.sender == service, "Slasher: Only Service ");
+        require(gracePeriodEnds[staker] != 0, "Slasher: Wrong Staker");
 
-        delete slashItems[slashId];
-        slashCounter[staker]--;
+        delete gracePeriodEnds[staker];
 
-        if (slashCounter[staker] == 0) {
-            hub.onUnfreeze(staker, serviceId);
+        hub.onUnfreeze(serviceId, staker);
+    }
+
+    function proveInnocence(bytes calldata proof) public {
+        require(gracePeriodEnds[msg.sender] != 0, "Slasher: Wrong Staker");
+        require(gracePeriodEnds[msg.sender] > block.timestamp, "Slasher: Grace Period Ended");
+
+        if (_verifyProof(msg.sender, proof)) {
+            delete gracePeriodEnds[msg.sender];
+            hub.onUnfreeze(serviceId, msg.sender);
+        } else {
+            revert("Slasher: Proof Invalid");
         }
     }
 
-    function slash(address staker, uint256[] slashIds) public {
-        require(msg.sender == _service, "Slasher: Only Service ");
+    function slash(address staker, uint8 percentage) public {
+        require(msg.sender == service, "Slasher: Only Service ");
+        require(gracePeriodEnds[staker] != 0, "Slasher: Wrong Staker");
 
-        SlashItem[] memory sis;
+        delete gracePeriodEnds[staker];
 
-        for (uint256 i = 0; i < slashIds.length; i++) {
-            SlashItem memory slashItem = slashItems[slashIds[i]];
+        Hub.SlashingInput memory slashingInputs = Hub.SlashingInput({strategyId: 1, percentage: percentage});
 
-            if (slashItem.staker == staker && block.timestamp > slashItem.gracePeriodEnd) {
-                sis.push(slashItem);
-            }
-        }
+        Hub.SlashingInput[] memory input = new Hub.SlashingInput[](1);
+        input[0] = slashingInputs;
 
-        hub.onSlash(staker, serviceId, sis);
+        hub.onSlash(serviceId, staker, input);
     }
 
-    function instaSlash(address staker, uint8 percentage, bytes calldata proof) public {
-        // TODO
+    function _verifyProof(address, bytes calldata) internal pure returns (bool) {
+        // validate proof here
+        return true;
     }
 }

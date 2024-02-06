@@ -10,16 +10,16 @@ import {Hub} from "../StakingHub.sol";
 /// @title ERC20Strategy
 /// @author Polygon Labs
 /// @notice An ERC20-compatible abstract template contract inheriting from BaseStrategy
-abstract contract ERC20Strategy is ERC20Burnable, BaseStrategy {
+abstract contract ERC20Strategy is ERC20Burnable, Strategy {
     IERC20 public immutable underlying; // Must not allow reentrancy
 
     // TODO add events
 
-    constructor(IERC20 _underlying, string memory name, string memory symbol, address _stakingHub) ERC20(name, symbol) BaseStrategy(_stakingHub) {
+    constructor(IERC20 _underlying, string memory name, string memory symbol, address _stakingHub) ERC20(name, symbol) Strategy(_stakingHub) {
         underlying = _underlying;
     }
 
-    function balanceOf(address account) public view override(ERC20, BaseStrategy) returns (uint256) {
+    function balanceOf(address account) public view override(ERC20, Strategy) returns (uint256) {
         return ERC20.balanceOf(account);
     }
 
@@ -41,7 +41,7 @@ abstract contract ERC20Strategy is ERC20Burnable, BaseStrategy {
     }
 
     function withdraw(uint256 amount) external {
-        require(Hub(stakingHub).hasActiveSubscriptions(msg.sender) == false, "ERC20Strategy: Cannot withdraw: active subscription");
+        // require(Hub(stakingHub).hasActiveSubscriptions(msg.sender) == false, "ERC20Strategy: Cannot withdraw: active subscription");
 
         _burn(msg.sender, amount);
         underlying.transfer(msg.sender, amount);

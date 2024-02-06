@@ -40,6 +40,11 @@ contract Hub {
         uint256 scheduledTime;
     }
 
+    struct SlashingInput {
+        uint256 strategyId;
+        uint8 percentage;
+    }
+
     struct StrategyData {
         IStrategy strategy;
     }
@@ -95,23 +100,20 @@ contract Hub {
     }
 
     /// @notice Adds a new Service to the Hub.
-    /// @param maximumSlashingPercentages Use `0` or `100` for ERC-721 tokens.
+    /// @param strategies_.percentage Use `0` or `100` for ERC-721 tokens.
     /// @dev Called by the Service.
-    function registerService(uint256[] calldata strategies_, uint256[] calldata maximumSlashingPercentages, uint256 unstakingNoticePeriod, address slasher)
-        external
-        returns (uint256 id)
-    {
+    function registerService(SlashingInput[] calldata strategies_, uint256 unstakingNoticePeriod, address slasher) external returns (uint256 id) {
         require(services[msg.sender] == 0, "Service already registered");
-        _validateStrategyInputs(strategyIds, amountsOrIds, true);
+        _validateStrategyInputs(strategies_);
 
         // Add the Service.
         id = ++_serviceCounter;
         services[msg.sender] = id;
         serviceData[id].service = IService(msg.sender);
         for (uint256 i; i < strategies_.length; ++i) {
-            serviceData[id].strategies.push(strategies_[i]);
-            serviceData[id].usesStrategy[strategies_[i]] = true;
-            serviceData[id].maximumSlashingPercentage[strategies_[i]] = maximumSlashingPercentages[i];
+            serviceData[id].strategies.push(strategies_[i].strategyId);
+            serviceData[id].usesStrategy[strategies_[i].strategyId] = true;
+            serviceData[id].maximumSlashingPercentage[strategies_[i].strategyId] = strategies_[i].percentage;
         }
         serviceData[id].unstakingNoticePeriod = unstakingNoticePeriod;
         serviceData[id].slasher = slasher;
@@ -129,9 +131,10 @@ contract Hub {
     /// @dev Triggers `onRestake` on all Strategies the Service uses.
     /// @dev Triggers `onRestake` on the Service.
     /// @dev The subscription is updated at the end. The Strategies and Service may query `viewSubscription` to get the details of the current subscription the Staker has with the Service.
-    function restake(uint256 serviceId, uint256[] calldata strategyIds, uint256[] calldata amountsOrIds, uint256 commitUntil) external {
+    function restake(uint256 serviceId, uint256[] calldata amountsOrIds, uint256 commitUntil) external {
         require(serviceId <= _serviceCounter, "Invalid Service");
-        _validateStrategyInputs(strategyIds, amountsOrIds, false);
+        uint256[] memory strategyIds = serviceData[serviceId].strategies;
+        require(amountsOrIds.length == strategyIds.length, "Invalid amountsOrIds");
         require(commitUntil == 0 || commitUntil > block.timestamp, "Invalid commitment");
         require(
             commitUntil == 0 || !subscriptions[msg.sender].exists(serviceId) || commitUntil > subscriptions[msg.sender].viewCommitment(serviceId),
@@ -167,7 +170,6 @@ contract Hub {
     /// @notice Lets the Staker initiate the unstaking proccess from a Service if the Service requires unstaking notice.
     /// @notice Lets the Staker unstake immediately if a) the Service does not require unstaking notice; b) the Staker has given unstaking notice and the unstaking notice period has passed; c) the Service lets the Staker unstake anyway.
     /// @notice Additionaly, lets the Staker unstake immediately if the Service has scheduled a Slasher update or the last Slasher update was less then 7 days ago.
-    /// @param strategyIds Will be ignored if the Service required unstaking notice and you are finalizing the unstaking now.
     /// @param amountsOrIds You may pass `2**256 - 1` (`type(uint256).max`) to unstake the remaing amount of the stake.
     /// @param amountsOrIds Will be ignored if the Service required unstaking notice and you are finalizing the unstaking now.
     /// @return finalized Whether the unstaking was finalized, or only initiated.
@@ -176,14 +178,11 @@ contract Hub {
     /// @dev Triggers `onUnstake` on the Service.
     /// @dev Triggers `onUnstake` on all Strategies the Service uses.
     /// @dev The subscription is updated at the end. The Strategies and Service may query `viewSubscription` to get the details of the current subscription the Staker has with the Service.
-    function unstake(uint256 serviceId, uint256[] calldata strategyIds, uint256[] calldata amountsOrIds)
-        external
-        returns (bool finalized, uint256 finalizationTime)
-    {
-        require(serviceId <= _serviceCounter, "Invalid Service");
+    function unstake(uint256 serviceId, uint256[] calldata amountsOrIds) external returns (bool finalized, uint256 finalizationTime) {
         require(subscriptions[msg.sender].exists(serviceId), "Not subscribed");
+        uint256[] memory strategyIds = serviceData[serviceId].strategies;
+        require(amountsOrIds.length == strategyIds.length, "Invalid amountsOrIds");
         require(!subscriptions[msg.sender].isFrozen(), "Cannot unstake while frozen");
-        _validateStrategyInputs(strategyIds, amountsOrIds, false);
 
         // Determine whether to initiate the unstaking (i.e., give unstaking notice) or finalize the unstaking.
         if (serviceData[serviceId].unstakingNoticePeriod != 0) {
@@ -245,8 +244,6 @@ contract Hub {
         // Apply the scheduled Slasher update.
         serviceData[serviceId].slasher = update.newSlasher;
         serviceData[serviceId].lastSlasherUpdate = block.timestamp;
-
-        delete update;
     }
 
     // ========== TRIGGERS ==========
@@ -298,7 +295,8 @@ contract Hub {
                     break;
                 }
             }
-            try strategyData[strategyId].strategy.onSlash(staker, percentage) {}
+            // TODO: strategy expects amount, not percentage
+            try strategyData[strategyId].strategy.onSlash(staker, serviceId, percentage) {}
             catch (bytes memory data) {
                 emit SlashingError(strategyId, msg.sender, staker, data);
             }
@@ -308,7 +306,9 @@ contract Hub {
         subscriptions[staker].unfreeze(serviceId);
     }
 
-    // TODO Add onUnfreeze
+    function onUnfreeze(uint256 serviceId, address staker) external {
+        // TODO Add onUnfreeze
+    }
 
     // Review: Should a Service be able to unusubscribe a Staker?
     // Answer: Yes. at any moment
@@ -329,30 +329,25 @@ contract Hub {
     /// @return committedUntil `0` if `exists` is `false`.
     function viewSubscription(address staker, uint256 serviceId) external view returns (bool exists, uint256 committedUntil) {
         exists = subscriptions[staker].exists(serviceId);
-        committedUntil = exists ? subscriptions[staker].viewCommittment(serviceId) : 0;
+        committedUntil = exists ? subscriptions[staker].viewCommitment(serviceId) : 0;
     }
 
     // ========== HELPERS ==========
 
     /// @dev Reverts if Strategy IDs and the other inputs are not of the same length, a Strategy does not exist, or an other input is invalid.
-    /// @param slashing Whether to show the error messages for slashing or staking.
-    function _validateStrategyInputs(uint256[] calldata strategyIds, uint256[] calldata slashingOrStakingInputs, bool slashing) internal returns (bool valid) {
-        require(
-            slashingOrStakingInputs.length == strategies_.length,
-            string.concat("Invalid length of ", slashing ? "maximum slashing percetages" : "amounts or IDs")
-        );
-        for (uint256 i = 0; i < strategies_.length; ++i) {
-            uint256 strategyId = strategies_[i];
-            require(strategyId <= _strategyCounter, "Invalid Strategy");
-            if (slashing) require(slashingOrStakingInputs[i] <= 100, "Invalid slashing percentage");
-            else require(slashingOrStakingInputs[i] != 0, "Invalid amount or ID");
-            for (uint256 j = i + 1; j < strategies_.length; ++j) {
-                require(strategyId != strategies_[j], "Duplicate Strategy");
-            }
+    /// @dev strategy ids must be sorted in ascending order for duplicate check
+    function _validateStrategyInputs(SlashingInput[] calldata strategies_) internal returns (bool valid) {
+        uint256 lastId;
+        uint256 len = strategies_.length;
+        for (uint256 i = 0; i < len; ++i) {
+            uint256 strategyId = strategies_[i].strategyId;
+            require(strategyId > lastId, "Duplicate Strategy or Unsorted List");
+            require(strategies_[i].percentage <= 100, "Invalid slashing percentage");
         }
+        require(lastId <= _strategyCounter, "Invalid Strategy");
     }
 
-    function _initiateUnstaking(int256 serviceId, uint256[] calldata strategyIds, uint256[] calldata amountsOrIds)
+    function _initiateUnstaking(uint256 serviceId, uint256[] memory strategyIds, uint256[] calldata amountsOrIds)
         internal
         returns (bool finalized, uint256 finalizationTime)
     {
@@ -362,7 +357,7 @@ contract Hub {
         // Confirm the unstaking with the Service if the Staker will still be committed when the unstaking notice period has passed.
         // The Service can revert.
         if (subscriptions[msg.sender].viewCommitment(serviceId) + serviceData[serviceId].unstakingNoticePeriod > block.timestamp) {
-            finalizeImmediately = serviceData[serviceId].service.onInitializeUnstaking(serviceId, strategyIds, amountsOrIds);
+            finalizeImmediately = serviceData[serviceId].service.onInitializeUnstaking(msg.sender, strategyIds, amountsOrIds);
         } else {
             // Let the Staker initiate unstaking if the Staker is no longer committed, or will no longer be committed after the unstaking notice period has passed.
             // Notify the Service that the Staker has unstaked.
@@ -380,27 +375,27 @@ contract Hub {
         if (finalizeImmediately) return _finalizeUnstaking(serviceId, strategyIds, amountsOrIds, true);
 
         // Schedule the unstaking.
-        uint256 scheduledTime = block.timestamp + serviceData[serviceId].stakingNoticePeriod;
+        uint256 scheduledTime = block.timestamp + serviceData[serviceId].unstakingNotice[msg.sender].scheduledTime;
         serviceData[serviceId].unstakingNotice[msg.sender] = UnstakingNotice(strategyIds, amountsOrIds, scheduledTime);
 
         return (false, scheduledTime);
     }
 
-    function _finalizeUnstaking(uint256 serviceId, uint256[] calldata strategyIds, uint256[] calldata amountsOrIds, bool force)
+    function _finalizeUnstaking(uint256 serviceId, uint256[] memory strategyIds, uint256[] memory amountsOrIds, bool force)
         internal
         returns (bool finalized, uint256 finalizationTime)
     {
         if (!force) {
             require(
-                serviceData[serviceId].unstakingNotice[msg.sender] != 0 && serviceData[serviceId].unstakingNotice[msg.sender] <= block.timestamp
-                    || serviceData[serviceId].unstakingNoticePeriod == 0,
+                serviceData[serviceId].unstakingNotice[msg.sender].scheduledTime != 0
+                    && serviceData[serviceId].unstakingNotice[msg.sender].scheduledTime <= block.timestamp || serviceData[serviceId].unstakingNoticePeriod == 0,
                 "You must announce unstaking first"
             );
         }
 
         // Notify the Service that the Staker is unstaking.
         // Reverting not allowed.
-        try serviceData[serviceId].service.onFinalizeUnstaking{gas: SERVICE_UNSTAKE_GAS}(msg.sender, strategyIds, amountsOrIds) {}
+        try serviceData[serviceId].service.onFinalizeUnstaking{gas: SERVICE_UNSTAKE_GAS}(msg.sender) {}
         catch (bytes memory data) {
             emit UnstakingError(serviceId, msg.sender, data);
         }

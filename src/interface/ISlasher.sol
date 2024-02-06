@@ -4,12 +4,14 @@ pragma solidity 0.8.23;
 /// @title ISlasher
 /// @author Polygon Labs
 /// @notice A Slasher separates the freezing and slashing functionality from a Service.
+/// @dev this is an example interface for a slashing contract
 interface ISlasher {
     /// @notice Temporarily prevents a Staker from taking action.
+    /// @notice Provides proof of malicious behavior.
     /// @notice starts grace period in which staker can prove their innocence
     /// @dev Called by a service.
     /// @dev Calls onFreeze on the Hub.
-    function freeze(address staker) external;
+    function freeze(address staker, bytes calldata proof) external;
 
     /// @notice Unfreezes a Staker.
     /// @notice will be called in case innocence of a staker has been established by a service.
@@ -24,10 +26,4 @@ interface ISlasher {
     /// @dev Called by [up to the Slasher to decide].
     /// @dev Calls onSlash on the Hub.
     function slash(address staker, uint8 percentage) external;
-
-    /// @notice Instantlyakes a portion of a Staker's funds away.
-    /// @notice Proof of malice must be submitted and validated by the Slasher
-    /// @dev Called by anyone.
-    /// @dev Calls onSlash on the Hub.
-    function instaSlash(address staker, uint8 percentage, bytes calldata proof) external;
 }
