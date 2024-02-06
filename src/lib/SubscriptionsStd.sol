@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.23;
 
-// TODO Ditch the list and change to deterministic tracking with a counter.
-
 /// @dev The single-linked list data-type for tracking subscriptions.
 struct Subscriptions {
-    uint256 head;
+    uint256 count;
+    uint256 freezeCount;
     mapping(uint256 service => SubscriptionsStd.Details details) items;
 }
 
@@ -19,11 +18,11 @@ struct Subscriptions {
 library SubscriptionsStd {
     // ========== DATA TYPES ==========
 
+    // Review: Is it more gas-efficient to use doubly-linked list? For example, `stopTracking` won't need to iterate over items.
     struct Details {
         bool exists;
         uint256 committedUntil;
         uint256 lastFreezingEnd;
-        uint256 next;
     }
 
     // ========== ACTIONS ==========
@@ -34,8 +33,8 @@ library SubscriptionsStd {
 
         // Track a new subscription.
         if (!exists(self, service)) {
-            self.items[service] = Details(true, commitUntil, 0, self.head);
-            self.head = service;
+            self.items[service] = Details(true, commitUntil, 0);
+            self.count++;
         } else {
             // Update the lock-in period.
             self.items[service].committedUntil = commitUntil;
@@ -45,43 +44,29 @@ library SubscriptionsStd {
     /// @notice Stops tracking a subscription.
     function stopTracking(Subscriptions storage self, uint256 service) public {
         assert(exists(self, service));
-
-        if (self.head == service) {
-            self.head = self.items[self.head].next;
-            delete self.items[service];
-            return;
-        }
-
-        uint256 current = self.head;
-        while (self.items[current].next != 0) {
-            if (self.items[current].next == service) {
-                self.items[current].next = self.items[self.items[current].next].next;
-                delete self.items[service];
-                return;
-            }
-            current = self.items[current].next;
-        }
+        delete self.items[service];
+        self.count--;
     }
 
     /// @notice Sets the end of the freeze period of a subscription that is already being tracked.
     function freeze(Subscriptions storage self, uint256 service, uint256 newFreezeEnd) public {
         assert(exists(self, service));
         assert(newFreezeEnd > self.items[service].lastFreezingEnd);
-
+        self.freezeCount++;
         self.items[service].lastFreezingEnd = newFreezeEnd;
     }
 
     /// @notice Resets the end of the freeze period of a subscription that is already being tracked.
     function unfreeze(Subscriptions storage self, uint256 service) public {
         assert(exists(self, service));
-
+        self.freezeCount--;
         self.items[service].lastFreezingEnd = 0;
     }
 
     // ========== QUERIES ==========
 
     function hasSubscriptions(Subscriptions storage self) public view returns (bool) {
-        return self.head != 0;
+        return self.count != 0;
     }
 
     /// @return Whether a subscription is active.
@@ -98,27 +83,12 @@ library SubscriptionsStd {
 
     /// @return Whether the Staker is frozen.
     function isFrozen(Subscriptions storage self) public view returns (bool) {
-        uint256 currentServiceId = self.head;
-        while (currentServiceId != 0) {
-            if (block.timestamp < self.items[currentServiceId].lastFreezingEnd) return true;
-            currentServiceId = iterate(self, currentServiceId);
-        }
-
-        return false;
+        self.freezeCount != 0;
     }
 
     function viewCommitment(Subscriptions storage self, uint256 service) public view returns (uint256) {
         assert(exists(self, service));
 
         return self.items[service].committedUntil;
-    }
-
-    // ========== UTILITIES ==========
-
-    /// @dev Use to get the next subscription from the linked list.
-    function iterate(Subscriptions storage self, uint256 service) public view returns (uint256) {
-        assert(exists(self, service));
-
-        return self.items[service].next;
     }
 }

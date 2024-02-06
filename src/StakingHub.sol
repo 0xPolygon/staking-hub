@@ -4,6 +4,7 @@ pragma solidity 0.8.23;
 import {IService} from "./interface/IService.sol";
 import {IStrategy} from "./interface/IStrategy.sol";
 import {Subscriptions, SubscriptionsStd} from "./lib/SubscriptionsStd.sol";
+import {PackedUints} from "./lib/PackedUints.sol";
 
 // TODO: Update docs.
 // TODO: Double-check all `block.timestamp` conditions are correct (e.g., >= vs <).
@@ -13,16 +14,15 @@ import {Subscriptions, SubscriptionsStd} from "./lib/SubscriptionsStd.sol";
 /// @notice The goal is to create new income streams for Stakers. Meanwhile, Services can acquire Stakers.
 /// @notice Stakers can subscribe to Services by restaking via Strategies.
 contract Hub {
-    // ========== DATA TYPES ==========
-
+    using PackedUints for uint256;
     using SubscriptionsStd for Subscriptions;
+    // ========== DATA TYPES ==========
 
     // Review: Do we want to allow Services to update thier `strategies`, `unstakingNoticePeriod`?
     struct ServiceData {
         IService service;
         uint256[] strategies;
-        mapping(uint256 strategyId => bool used) usesStrategy;
-        mapping(uint256 strategyId => uint8 percentage) maximumSlashingPercentage;
+        uint256 slashingPercentages;
         uint256 unstakingNoticePeriod;
         mapping(address staker => UnstakingNotice unstakingNotice) unstakingNotice; // TODO Convert to queue per service (context: the current system allows only one unstaking notice at a time, per service)
         address slasher; // Review: Can multiple Services use the same Slasher? If so, we'll need some guardrails.
@@ -104,17 +104,19 @@ contract Hub {
     /// @dev Called by the Service.
     function registerService(SlashingInput[] calldata strategies_, uint256 unstakingNoticePeriod, address slasher) external returns (uint256 id) {
         require(services[msg.sender] == 0, "Service already registered");
+        require(strategies_.length < 33, "Limit Strategies to 32");
         _validateStrategyInputs(strategies_);
 
         // Add the Service.
         id = ++_serviceCounter;
         services[msg.sender] = id;
         serviceData[id].service = IService(msg.sender);
+        uint256 slashingPercentages;
         for (uint256 i; i < strategies_.length; ++i) {
             serviceData[id].strategies.push(strategies_[i].strategyId);
-            serviceData[id].usesStrategy[strategies_[i].strategyId] = true;
-            serviceData[id].maximumSlashingPercentage[strategies_[i].strategyId] = strategies_[i].percentage;
+            slashingPercentages = slashingPercentages.set(strategies_[i].percentage, i);
         }
+        serviceData[id].slashingPercentages = slashingPercentages;
         serviceData[id].unstakingNoticePeriod = unstakingNoticePeriod;
         serviceData[id].slasher = slasher;
 
@@ -150,8 +152,8 @@ contract Hub {
         // Reverting not allowed.
         // Note: We assume the Service trusts the Strategies not to revert by causing the call to run out of gas.
         for (uint256 i; i < strategyIds.length; ++i) {
-            uint8 maximumSlashingPercentage = serviceData[serviceId].maximumSlashingPercentage[strategyIds[i]];
-            try strategyData[strategyIds[i]].strategy.onRestake(msg.sender, amountsOrIds[i], serviceId, commitUntil, maximumSlashingPercentage) {}
+            uint256 maximumSlashingPercentages = serviceData[serviceId].slashingPercentages;
+            try strategyData[strategyIds[i]].strategy.onRestake(msg.sender, amountsOrIds[i], serviceId, commitUntil, maximumSlashingPercentages.get(i)) {}
             catch (bytes memory data) {
                 emit RestakingError(strategyIds[i], msg.sender, data);
             }
@@ -256,16 +258,6 @@ contract Hub {
 
         // Note: We assume the Staker trusts the Service not to freeze them repeatedly.
         subscriptions[staker].freeze(serviceId, block.timestamp + STAKER_FREEZE_PERIOD);
-
-        // Notify the Services that the Staker has been frozen.
-        // Reverting not allowed.
-        // TODO: We assume the Slasher trusts the Staker not to revert by causing the call to run out of gas. (!!!)
-        // Answer: EVENT ONLY. Just an event for the adjustment requirement too (slashing)? - add a note regarding the attack vector so no one changes it!
-        uint256 currentServiceId = subscriptions[msg.sender].head;
-        while (currentServiceId != 0) {
-            try serviceData[currentServiceId].service.onFreeze(staker) {} catch {}
-            currentServiceId = subscriptions[msg.sender].iterate(currentServiceId);
-        }
     }
 
     /// @notice Takes a portion of a Staker's funds away.
@@ -276,10 +268,11 @@ contract Hub {
     function onSlash(uint256 serviceId, address staker, SlashingInput[] calldata percentages) external {
         require(msg.sender == serviceData[serviceId].slasher, "Only Slasher can slash");
         require(subscriptions[staker].isFrozen(), "Staker not frozen");
+        uint256 maxSlashingPercentages = serviceData[serviceId].slashingPercentages;
         // TODO Do not allow duplicates. Do not allow Strategies not used.
         for (uint256 i; i < percentages.length; ++i) {
             SlashingInput calldata percentage = percentages[i];
-            require(percentage.percentage <= serviceData[serviceId].maximumSlashingPercentage[percentage.strategyId], "Slashing percentage exceeds maximum");
+            require(percentage.percentage <= maxSlashingPercentages.get(i), "Slashing percentage exceeds maximum");
         }
 
         // Notify all Strategies used by the Service that the Staker has been slashed.
