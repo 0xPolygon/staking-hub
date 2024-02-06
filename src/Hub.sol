@@ -248,11 +248,14 @@ contract Hub {
         // Apply the scheduled Slasher update.
         serviceData[serviceId].slasher = update.newSlasher;
         serviceData[serviceId].lastSlasherUpdate = block.timestamp;
+
+        delete update;
     }
 
     // ========== TRIGGERS ==========
 
-    /// @notice Temporarily prevents a Staker from unsubscribing from a Service.
+    /// @notice Temporarily prevents a staker from performing any action
+    /// @notice Can only be called once per service per freeze period
     /// @notice This period can be used to prove the Staker should be slashed.
     /// @dev Called by a Slasher of the Service.
     function onFreeze(uint256 serviceId, address staker) external {
