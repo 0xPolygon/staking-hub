@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.24;
 
 import {IService} from "./interface/IService.sol";
 import {IStrategy} from "./interface/IStrategy.sol";
@@ -14,9 +14,10 @@ import {PackedUints} from "./lib/PackedUints.sol";
 /// @notice The goal is to create new income streams for Stakers. Meanwhile, Services can acquire Stakers.
 /// @notice Stakers can subscribe to Services by restaking via Strategies.
 contract Hub {
+    // ========== DATA TYPES ==========
+
     using PackedUints for uint256;
     using SubscriptionsStd for Subscriptions;
-    // ========== DATA TYPES ==========
 
     // Review: Do we want to allow Services to update thier `strategies`, `unstakingNoticePeriod`?
     struct ServiceData {
@@ -24,7 +25,7 @@ contract Hub {
         uint256[] strategies;
         uint256 slashingPercentages;
         uint256 unstakingNoticePeriod;
-        mapping(address staker => UnstakingNotice unstakingNotice) unstakingNotice; // TODO Convert to queue per service (context: the current system allows only one unstaking notice at a time, per service)
+        mapping(address staker => UnstakingNotice unstakingNotice) unstakingNotice; // TODO Convert to queue per service (context: the current system allows the Staker only one unstaking notice at a time per Service)
         address slasher; // Review: Can multiple Services use the same Slasher? If so, we'll need some guardrails.
         uint256 lastSlasherUpdate;
     }
@@ -81,6 +82,7 @@ contract Hub {
     event RestakingError(uint256 indexed strategyId, address indexed staker, bytes data);
     event UnstakingParametersIgnored();
     event UnstakingError(uint256 indexed serviceOrStrategyId, address indexed staker, bytes data); // Review: May need to change `serviceOrStrategyId` to the address so they can be differentiated in case the IDs are the same.
+    event StakerFrozen(address indexed staker, uint256 serviceId);
     event SlashingError(uint256 indexed strategyId, address indexed slasher, address indexed staker, bytes data);
     event SlasherUpdateInitiated(uint256 indexed serviceId, address indexed newSlasher);
 
@@ -258,6 +260,11 @@ contract Hub {
 
         // Note: We assume the Staker trusts the Service not to freeze them repeatedly.
         subscriptions[staker].freeze(serviceId, block.timestamp + STAKER_FREEZE_PERIOD);
+
+        // Emit an event for Services that the Staker has been frozen.
+        // Note: Never notify any other Services (using the `onFreeze` trigger). Instead, emit an event.
+        // TODO: Describe the attack vector. Same for slashing.
+        emit StakerFrozen(staker, serviceId);
     }
 
     /// @notice Takes a portion of a Staker's funds away.
@@ -329,7 +336,7 @@ contract Hub {
 
     /// @dev Reverts if Strategy IDs and the other inputs are not of the same length, a Strategy does not exist, or an other input is invalid.
     /// @dev strategy ids must be sorted in ascending order for duplicate check
-    function _validateStrategyInputs(SlashingInput[] calldata strategies_) internal returns (bool valid) {
+    function _validateStrategyInputs(SlashingInput[] calldata strategies_) internal view {
         uint256 lastId;
         uint256 len = strategies_.length;
         for (uint256 i = 0; i < len; ++i) {
@@ -388,7 +395,7 @@ contract Hub {
 
         // Notify the Service that the Staker is unstaking.
         // Reverting not allowed.
-        try serviceData[serviceId].service.onFinalizeUnstaking{gas: SERVICE_UNSTAKE_GAS}(msg.sender) {}
+        try serviceData[serviceId].service.onFinalizeUnstaking{gas: SERVICE_UNSTAKE_GAS}(msg.sender, strategyIds, amountsOrIds) {}
         catch (bytes memory data) {
             emit UnstakingError(serviceId, msg.sender, data);
         }
@@ -409,8 +416,8 @@ contract Hub {
         // Note: We assume the Staker trust the Strategies not to revert by causing the call to run out of gas.
         bool stakeIsZero = true;
         for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
-            try strategyData[serviceData[serviceId].strategies[i]].strategy.balanceIn(msg.sender, serviceId) returns (uint256 balanceInService) {
-                if (balanceInService != 0) stakeIsZero = false;
+            try strategyData[serviceData[serviceId].strategies[i]].strategy.balanceOfIn(msg.sender, serviceId) returns (uint256 balanceOfInService) {
+                if (balanceOfInService != 0) stakeIsZero = false;
             } catch {}
         }
         if (stakeIsZero) subscriptions[msg.sender].stopTracking(serviceId);
@@ -423,3 +430,4 @@ contract Hub {
 }
 
 // Review: What happens if, for example, a Strategy also registers as a Service that uses itself (the Strategy), and then subscribes to iteself, etc. We'll probably disallow this.
+// Review: Similarly with Stakers and Slashers.

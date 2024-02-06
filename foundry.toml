@@ -5,7 +5,7 @@ libs = ["lib"]
 optimizer = true
 optimizer_runs = 999999
 via_ir = true
-solc = "0.8.23"
+solc = "0.8.24"
 verbosity = 2
 ffi = true
 

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.24;
 
 /// @dev The single-linked list data-type for tracking subscriptions.
 struct Subscriptions {
-    uint256 count;
-    uint256 freezeCount;
+    uint256 counter;
+    uint256 freezingCounter;
     mapping(uint256 service => SubscriptionsStd.Details details) items;
 }
 
@@ -18,7 +18,6 @@ struct Subscriptions {
 library SubscriptionsStd {
     // ========== DATA TYPES ==========
 
-    // Review: Is it more gas-efficient to use doubly-linked list? For example, `stopTracking` won't need to iterate over items.
     struct Details {
         bool exists;
         uint256 committedUntil;
@@ -34,7 +33,7 @@ library SubscriptionsStd {
         // Track a new subscription.
         if (!exists(self, service)) {
             self.items[service] = Details(true, commitUntil, 0);
-            self.count++;
+            self.counter++;
         } else {
             // Update the lock-in period.
             self.items[service].committedUntil = commitUntil;
@@ -45,28 +44,28 @@ library SubscriptionsStd {
     function stopTracking(Subscriptions storage self, uint256 service) public {
         assert(exists(self, service));
         delete self.items[service];
-        self.count--;
+        self.counter--;
     }
 
-    /// @notice Sets the end of the freeze period of a subscription that is already being tracked.
+    /// @notice Sets the end of the freezing period of a subscription that is already being tracked.
     function freeze(Subscriptions storage self, uint256 service, uint256 newFreezeEnd) public {
         assert(exists(self, service));
         assert(newFreezeEnd > self.items[service].lastFreezingEnd);
-        self.freezeCount++;
+        self.freezingCounter++;
         self.items[service].lastFreezingEnd = newFreezeEnd;
     }
 
     /// @notice Resets the end of the freeze period of a subscription that is already being tracked.
     function unfreeze(Subscriptions storage self, uint256 service) public {
         assert(exists(self, service));
-        self.freezeCount--;
+        self.freezingCounter--;
         self.items[service].lastFreezingEnd = 0;
     }
 
     // ========== QUERIES ==========
 
     function hasSubscriptions(Subscriptions storage self) public view returns (bool) {
-        return self.count != 0;
+        return self.counter != 0;
     }
 
     /// @return Whether a subscription is active.
@@ -83,7 +82,7 @@ library SubscriptionsStd {
 
     /// @return Whether the Staker is frozen.
     function isFrozen(Subscriptions storage self) public view returns (bool) {
-        self.freezeCount != 0;
+        self.freezingCounter != 0;
     }
 
     function viewCommitment(Subscriptions storage self, uint256 service) public view returns (uint256) {

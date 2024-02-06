@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import {Strategy} from "../Strategy.sol";
-import {Hub} from "../StakingHub.sol";
+import {Strategy} from "../template/Strategy.sol";
+import {Hub} from "../Hub.sol";
 
 /// @title ERC20Strategy
 /// @author Polygon Labs

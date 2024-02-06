@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.24;
 
-/// @title ISlasher
+/// @title Slasher
 /// @author Polygon Labs
 /// @notice A Slasher separates the freezing and slashing functionality from a Service.
 /// @dev this is an example interface for a slashing contract

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.24;
 
 /// @title Strategy
 /// @author Polygon Labs
@@ -26,5 +26,5 @@ interface IStrategy {
     function balanceOf(address staker) external view returns (uint256 balanceInStrategy);
 
     /// @return balanceInService The amount of funds from the Strategy the Staker has staked in a Service.
-    function balanceIn(address staker, uint256 service) external view returns (uint256 balanceInService);
+    function balanceOfIn(address staker, uint256 service) external view returns (uint256 balanceInService);
 }

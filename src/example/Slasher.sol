@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.24;
 
-import {ISlasher} from "../interface/ISlasher.sol";
-import {Hub} from "../StakingHub.sol";
+import {ISlasher} from "./interface/ISlasher.sol";
+import {Hub} from "../Hub.sol";
 
 /// @title Slasher Example With Double Signing
 /// @author Polygon Labs

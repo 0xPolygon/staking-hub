@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.24;
 
-import {Strategy} from "../Strategy.sol";
+import {Strategy} from "../template/Strategy.sol";
 
 /// @title ERC20PartialWithdrawalsStrategy
 /// @author Polygon Labs

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.24;
 
 // TODO Update docs.
-/// @title IService
+/// @title Service
 /// @author Polygon Labs
 /// @notice A Service represents a network.
 /// @notice Stakers can subscribe to the Service by restaking.
@@ -23,7 +23,7 @@ interface IService {
     function onInitializeUnstaking(address staker, uint256[] calldata strategyIds, uint256[] calldata amountsOrIds)
         external
         returns (bool finalizeImmediately);
-    function onFinalizeUnstaking(address staker) external;
+    function onFinalizeUnstaking(address staker, uint256[] calldata strategyIds, uint256[] calldata amountsOrIds) external;
 
     /// @notice Functionality not defined.
     /// @dev Called by the Hub when a Staker has been frozen by a Slasher of the Service.

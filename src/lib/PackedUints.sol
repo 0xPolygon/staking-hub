@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.23;
+pragma solidity 0.8.24;
 
 library PackedUints {
     function set(uint256 store, uint8 value, uint256 index) internal pure returns (uint256) {
