@@ -64,35 +64,35 @@ contract SlashingManager is StakingManager {
     /// @notice Takes a portion of a Staker's funds away.
     /// @notice The Staker must be frozen first.
     /// @dev Called by a Slasher of a Service.
-    /// @dev Calls onSlash on all Strategies the Services uses.
+    /// @dev Calls onSlash on all Lockers the Services uses.
     // TODO Aggregation (see the new [private/not on GH] Note + make sure to clear all freezes)
     function onSlash(uint256 serviceId, address staker, SlashingInput[] calldata percentages) external {
         require(msg.sender == serviceData[serviceId].slasher, "Only Slasher can slash");
         require(subscriptions[staker].isFrozen(), "Staker not frozen");
         uint256 maxSlashingPercentages = serviceData[serviceId].slashingPercentages;
-        // TODO Do not allow duplicates. Do not allow Strategies not used.
+        // TODO Do not allow duplicates. Do not allow Lockers not used.
         for (uint256 i; i < percentages.length; ++i) {
             SlashingInput calldata percentage = percentages[i];
             require(percentage.percentage <= maxSlashingPercentages.get(i), "Slashing percentage exceeds maximum");
         }
 
-        // Notify all Strategies used by the Service that the Staker has been slashed.
+        // Notify all Lockers used by the Service that the Staker has been slashed.
         // Reverting not allowed.
-        // TODO: We assume the Service trusts the Strategies not to revert by causing the call to run out of gas.
-        for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
-            uint256 strategyId = serviceData[serviceId].strategies[i];
+        // TODO: We assume the Service trusts the Lockers not to revert by causing the call to run out of gas.
+        for (uint256 i; i < serviceData[serviceId].lockers.length; ++i) {
+            uint256 lockerId = serviceData[serviceId].lockers[i];
             uint256 percentage;
             // Review: Gas-inefficient check.
             for (uint256 j; j < percentages.length; ++j) {
-                if (percentages[j].strategyId == strategyId) {
+                if (percentages[j].lockerId == lockerId) {
                     percentage = percentages[j].percentage;
                     break;
                 }
             }
-            // TODO: strategy expects amount, not percentage
-            try strategyData[strategyId].strategy.onSlash(staker, serviceId, percentage) {}
+            // TODO: locker expects amount, not percentage
+            try lockerData[lockerId].locker.onSlash(staker, serviceId, percentage) {}
             catch (bytes memory data) {
-                emit SlashingError(strategyId, msg.sender, staker, data);
+                emit SlashingError(lockerId, msg.sender, staker, data);
             }
         }
 
@@ -100,7 +100,7 @@ contract SlashingManager is StakingManager {
         subscriptions[staker].unfreeze(serviceId);
     }
 
-    function finalizeSlashing(uint256 strategy, uint256 slashingId) external {
+    function finalizeSlashing(uint256 locker, uint256 slashingId) external {
         // TODO
     }
 

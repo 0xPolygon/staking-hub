@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {IService} from "./interface/IService.sol";
-import {IStrategy} from "./interface/IStrategy.sol";
+import {ILocker} from "./interface/ILocker.sol";
 import {Subscriptions, SubscriptionsStd} from "./lib/SubscriptionsStd.sol";
 import {PackedUints} from "./lib/PackedUints.sol";
 
@@ -12,17 +12,17 @@ import {PackedUints} from "./lib/PackedUints.sol";
 /// @author Polygon Labs
 /// @notice The Hub is a permissionless place where Stakers and Services gather.
 /// @notice The goal is to create new income streams for Stakers. Meanwhile, Services can acquire Stakers.
-/// @notice Stakers can subscribe to Services by restaking via Strategies.
+/// @notice Stakers can subscribe to Services by restaking via Lockers.
 contract Hub {
     // ========== DATA TYPES ==========
 
     using PackedUints for uint256;
     using SubscriptionsStd for Subscriptions;
 
-    // Review: Do we want to allow Services to update thier `strategies`, `unstakingNoticePeriod`?
+    // Review: Do we want to allow Services to update thier `lockers`, `unstakingNoticePeriod`?
     struct ServiceData {
         IService service;
-        uint256[] strategies;
+        uint256[] lockers;
         uint256 slashingPercentages;
         uint256 unstakingNoticePeriod;
         mapping(address staker => UnstakingNotice unstakingNotice) unstakingNotice; // TODO Convert to queue per service (context: the current system allows the Staker only one unstaking notice at a time per Service)
@@ -31,7 +31,7 @@ contract Hub {
     }
 
     struct UnstakingNotice {
-        uint256[] strategyIds;
+        uint256[] lockerIds;
         uint256[] amountsOrIds;
         uint256 scheduledTime;
     }
@@ -42,12 +42,12 @@ contract Hub {
     }
 
     struct SlashingInput {
-        uint256 strategyId;
+        uint256 lockerId;
         uint8 percentage;
     }
 
-    struct StrategyData {
-        IStrategy strategy;
+    struct LockerData {
+        ILocker locker;
     }
     // ========== PARAMETERS ==========
 
@@ -58,18 +58,18 @@ contract Hub {
 
     // ========== INTERNAL RECORDS ==========
 
-    uint256 private _strategyCounter;
+    uint256 private _lockerCounter;
     uint256 private _serviceCounter;
 
     // ========== SERVICE & STRATEGY DATA ==========
 
-    mapping(address strategy => uint256 strategyId) public strategies;
+    mapping(address locker => uint256 lockerId) public lockers;
     mapping(address service => uint256 serviceId) public services;
 
     mapping(uint256 serviceId => ServiceData serviceData) public serviceData;
     mapping(uint256 serviceId => SlasherUpdate slasherUpdate) public slasherUpdates;
 
-    mapping(uint256 strategyId => StrategyData strategyData) public strategyData;
+    mapping(uint256 lockerId => LockerData lockerData) public lockerData;
 
     // ========== STAKER DATA ==========
 
@@ -77,46 +77,46 @@ contract Hub {
 
     // ========== EVENTS ==========
 
-    event StrategyRegistered(address indexed strategy, uint256 indexed strategyId);
+    event LockerRegistered(address indexed locker, uint256 indexed lockerId);
     event ServiceRegistered(address indexed service, uint256 indexed serviceId);
-    event RestakingError(uint256 indexed strategyId, address indexed staker, bytes data);
+    event RestakingError(uint256 indexed lockerId, address indexed staker, bytes data);
     event UnstakingParametersIgnored();
-    event UnstakingError(uint256 indexed serviceOrStrategyId, address indexed staker, bytes data); // Review: May need to change `serviceOrStrategyId` to the address so they can be differentiated in case the IDs are the same.
+    event UnstakingError(uint256 indexed serviceOrLockerId, address indexed staker, bytes data); // Review: May need to change `serviceOrLockerId` to the address so they can be differentiated in case the IDs are the same.
     event StakerFrozen(address indexed staker, uint256 serviceId);
-    event SlashingError(uint256 indexed strategyId, address indexed slasher, address indexed staker, bytes data);
+    event SlashingError(uint256 indexed lockerId, address indexed slasher, address indexed staker, bytes data);
     event SlasherUpdateInitiated(uint256 indexed serviceId, address indexed newSlasher);
 
     // ========== ACTIONS ==========
 
-    /// @notice Adds a new Strategy to the Hub.
-    /// @dev Called by the Strategy.
-    function registerStrategy() external returns (uint256 id) {
-        require(strategies[msg.sender] == 0, "Strategy already registered");
+    /// @notice Adds a new Locker to the Hub.
+    /// @dev Called by the Locker.
+    function registerLocker() external returns (uint256 id) {
+        require(lockers[msg.sender] == 0, "Locker already registered");
 
-        // Add the Strategy.
-        id = ++_strategyCounter;
-        strategies[msg.sender] = id;
-        strategyData[id].strategy = IStrategy(msg.sender);
+        // Add the Locker.
+        id = ++_lockerCounter;
+        lockers[msg.sender] = id;
+        lockerData[id].locker = ILocker(msg.sender);
 
-        emit StrategyRegistered(msg.sender, id);
+        emit LockerRegistered(msg.sender, id);
     }
 
     /// @notice Adds a new Service to the Hub.
-    /// @param strategies_.percentage Use `0` or `100` for ERC-721 tokens.
+    /// @param lockers_.percentage Use `0` or `100` for ERC-721 tokens.
     /// @dev Called by the Service.
-    function registerService(SlashingInput[] calldata strategies_, uint256 unstakingNoticePeriod, address slasher) external returns (uint256 id) {
+    function registerService(SlashingInput[] calldata lockers_, uint256 unstakingNoticePeriod, address slasher) external returns (uint256 id) {
         require(services[msg.sender] == 0, "Service already registered");
-        require(strategies_.length < 33, "Limit Strategies to 32");
-        _validateStrategyInputs(strategies_);
+        require(lockers_.length < 33, "Limit Lockers to 32");
+        _validateLockerInputs(lockers_);
 
         // Add the Service.
         id = ++_serviceCounter;
         services[msg.sender] = id;
         serviceData[id].service = IService(msg.sender);
         uint256 slashingPercentages;
-        for (uint256 i; i < strategies_.length; ++i) {
-            serviceData[id].strategies.push(strategies_[i].strategyId);
-            slashingPercentages = slashingPercentages.set(strategies_[i].percentage, i);
+        for (uint256 i; i < lockers_.length; ++i) {
+            serviceData[id].lockers.push(lockers_[i].lockerId);
+            slashingPercentages = slashingPercentages.set(lockers_[i].percentage, i);
         }
         serviceData[id].slashingPercentages = slashingPercentages;
         serviceData[id].unstakingNoticePeriod = unstakingNoticePeriod;
@@ -127,18 +127,18 @@ contract Hub {
 
     // TODO Service-specific freezing, not global.
 
-    /// @notice Lets a Staker reuse funds they have previously deposited into Strategies used by a Service to increase their stake in that Service.
+    /// @notice Lets a Staker reuse funds they have previously deposited into Lockers used by a Service to increase their stake in that Service.
     /// @notice By restaking, the Staker becomes subscribed to the Service. Subscription terms are defined in the Service's contract.
     /// @notice Restaking may increase the Staker's commitment to the Service if the Staker is already subscribed to the Service. This depends on the `commitUntil` parameter.
-    /// @param commitUntil You may pass `0` to indicate no change in commitment. `commitUntil` will always be resolved before notifying the Service and Strategies.
+    /// @param commitUntil You may pass `0` to indicate no change in commitment. `commitUntil` will always be resolved before notifying the Service and Lockers.
     /// @dev Called by the Staker.
-    /// @dev Triggers `onRestake` on all Strategies the Service uses.
+    /// @dev Triggers `onRestake` on all Lockers the Service uses.
     /// @dev Triggers `onRestake` on the Service.
-    /// @dev The subscription is updated at the end. The Strategies and Service may query `viewSubscription` to get the details of the current subscription the Staker has with the Service.
+    /// @dev The subscription is updated at the end. The Lockers and Service may query `viewSubscription` to get the details of the current subscription the Staker has with the Service.
     function restake(uint256 serviceId, uint256[] calldata amountsOrIds, uint256 commitUntil) external {
         require(serviceId <= _serviceCounter, "Invalid Service");
-        uint256[] memory strategyIds = serviceData[serviceId].strategies;
-        require(amountsOrIds.length == strategyIds.length, "Invalid amountsOrIds");
+        uint256[] memory lockerIds = serviceData[serviceId].lockers;
+        require(amountsOrIds.length == lockerIds.length, "Invalid amountsOrIds");
         require(commitUntil == 0 || commitUntil > block.timestamp, "Invalid commitment");
         require(
             commitUntil == 0 || !subscriptions[msg.sender].exists(serviceId) || commitUntil > subscriptions[msg.sender].viewCommitment(serviceId),
@@ -150,20 +150,20 @@ contract Hub {
             commitUntil = commitUntil != 0 ? commitUntil : subscriptions[msg.sender].viewCommitment(serviceId);
         }
 
-        // Notify the Strategies that the Staker is restaking.
+        // Notify the Lockers that the Staker is restaking.
         // Reverting not allowed.
-        // Note: We assume the Service trusts the Strategies not to revert by causing the call to run out of gas.
-        for (uint256 i; i < strategyIds.length; ++i) {
+        // Note: We assume the Service trusts the Lockers not to revert by causing the call to run out of gas.
+        for (uint256 i; i < lockerIds.length; ++i) {
             uint256 maximumSlashingPercentages = serviceData[serviceId].slashingPercentages;
-            try strategyData[strategyIds[i]].strategy.onRestake(msg.sender, amountsOrIds[i], serviceId, commitUntil, maximumSlashingPercentages.get(i)) {}
+            try lockerData[lockerIds[i]].locker.onRestake(msg.sender, amountsOrIds[i], serviceId, commitUntil, maximumSlashingPercentages.get(i)) {}
             catch (bytes memory data) {
-                emit RestakingError(strategyIds[i], msg.sender, data);
+                emit RestakingError(lockerIds[i], msg.sender, data);
             }
         }
 
         // Confirm the restaking with the Service.
         // The Service can revert.
-        serviceData[serviceId].service.onRestake(msg.sender, strategyIds, amountsOrIds, commitUntil);
+        serviceData[serviceId].service.onRestake(msg.sender, lockerIds, amountsOrIds, commitUntil);
 
         // Activate a new subscription or extend the lock-in period of the existing one.
         subscriptions[msg.sender].track(serviceId, commitUntil);
@@ -180,42 +180,39 @@ contract Hub {
     /// @return finalizationTime The time at which the unstaking was finalized (`block.timestamp`), or will become finalizable.
     /// @dev Called by the Staker.
     /// @dev Triggers `onUnstake` on the Service.
-    /// @dev Triggers `onUnstake` on all Strategies the Service uses.
-    /// @dev The subscription is updated at the end. The Strategies and Service may query `viewSubscription` to get the details of the current subscription the Staker has with the Service.
+    /// @dev Triggers `onUnstake` on all Lockers the Service uses.
+    /// @dev The subscription is updated at the end. The Lockers and Service may query `viewSubscription` to get the details of the current subscription the Staker has with the Service.
     function unstake(uint256 serviceId, uint256[] calldata amountsOrIds) external returns (bool finalized, uint256 finalizationTime) {
         require(subscriptions[msg.sender].exists(serviceId), "Not subscribed");
-        uint256[] memory strategyIds = serviceData[serviceId].strategies;
-        require(amountsOrIds.length == strategyIds.length, "Invalid amountsOrIds");
+        uint256[] memory lockerIds = serviceData[serviceId].lockers;
+        require(amountsOrIds.length == lockerIds.length, "Invalid amountsOrIds");
         require(!subscriptions[msg.sender].isFrozen(), "Cannot unstake while frozen");
 
         // Determine whether to initiate the unstaking (i.e., give unstaking notice) or finalize the unstaking.
         if (serviceData[serviceId].unstakingNoticePeriod != 0) {
             // Initiate the unstaking if the Service requires unstaking notice and the Staker has not given one,
             // or finalize the unstaking if the Service has scheduled a Slasher update or the last Slasher update was less than 7 days ago.
-            if (serviceData[serviceId].unstakingNotice[msg.sender].strategyIds.length == 0) {
+            if (serviceData[serviceId].unstakingNotice[msg.sender].lockerIds.length == 0) {
                 if (slasherUpdates[serviceId].newSlasher == address(0) && serviceData[serviceId].lastSlasherUpdate < block.timestamp - 7 days) {
-                    return _initiateUnstaking(serviceId, strategyIds, amountsOrIds);
+                    return _initiateUnstaking(serviceId, lockerIds, amountsOrIds);
                 } else {
-                    return _finalizeUnstaking(serviceId, strategyIds, amountsOrIds, true);
+                    return _finalizeUnstaking(serviceId, lockerIds, amountsOrIds, true);
                 }
             } else {
                 // Finalize the unstaking if the Service requires unstaking notice and the Staker has given one.
-                if (strategyIds.length > 0) emit UnstakingParametersIgnored();
+                if (lockerIds.length > 0) emit UnstakingParametersIgnored();
                 return _finalizeUnstaking(
                     serviceId,
-                    serviceData[serviceId].unstakingNotice[msg.sender].strategyIds,
+                    serviceData[serviceId].unstakingNotice[msg.sender].lockerIds,
                     serviceData[serviceId].unstakingNotice[msg.sender].amountsOrIds,
                     false
                 );
             }
         } else {
             // Finalize the unstaking if the Service does not require unstaking notice.
-            if (strategyIds.length > 0) emit UnstakingParametersIgnored();
+            if (lockerIds.length > 0) emit UnstakingParametersIgnored();
             return _finalizeUnstaking(
-                serviceId,
-                serviceData[serviceId].unstakingNotice[msg.sender].strategyIds,
-                serviceData[serviceId].unstakingNotice[msg.sender].amountsOrIds,
-                false
+                serviceId, serviceData[serviceId].unstakingNotice[msg.sender].lockerIds, serviceData[serviceId].unstakingNotice[msg.sender].amountsOrIds, false
             );
         }
     }
@@ -273,35 +270,35 @@ contract Hub {
     /// @notice Takes a portion of a Staker's funds away.
     /// @notice The Staker must be frozen first.
     /// @dev Called by a Slasher of a Service.
-    /// @dev Calls onSlash on all Strategies the Services uses.
+    /// @dev Calls onSlash on all Lockers the Services uses.
     // TODO Aggregation (see the new [private/not on GH] Note + make sure to clear all freezes)
     function onSlash(uint256 serviceId, address staker, SlashingInput[] calldata percentages) external {
         require(msg.sender == serviceData[serviceId].slasher, "Only Slasher can slash");
         require(subscriptions[staker].isFrozen(), "Staker not frozen");
         uint256 maxSlashingPercentages = serviceData[serviceId].slashingPercentages;
-        // TODO Do not allow duplicates. Do not allow Strategies not used.
+        // TODO Do not allow duplicates. Do not allow Lockers not used.
         for (uint256 i; i < percentages.length; ++i) {
             SlashingInput calldata percentage = percentages[i];
             require(percentage.percentage <= maxSlashingPercentages.get(i), "Slashing percentage exceeds maximum");
         }
 
-        // Notify all Strategies used by the Service that the Staker has been slashed.
+        // Notify all Lockers used by the Service that the Staker has been slashed.
         // Reverting not allowed.
-        // TODO: We assume the Service trusts the Strategies not to revert by causing the call to run out of gas.
-        for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
-            uint256 strategyId = serviceData[serviceId].strategies[i];
+        // TODO: We assume the Service trusts the Lockers not to revert by causing the call to run out of gas.
+        for (uint256 i; i < serviceData[serviceId].lockers.length; ++i) {
+            uint256 lockerId = serviceData[serviceId].lockers[i];
             uint256 percentage;
             // Review: Gas-inefficient check.
             for (uint256 j; j < percentages.length; ++j) {
-                if (percentages[j].strategyId == strategyId) {
+                if (percentages[j].lockerId == lockerId) {
                     percentage = percentages[j].percentage;
                     break;
                 }
             }
-            // TODO: strategy expects amount, not percentage
-            try strategyData[strategyId].strategy.onSlash(staker, serviceId, percentage) {}
+            // TODO: locker expects amount, not percentage
+            try lockerData[lockerId].locker.onSlash(staker, serviceId, percentage) {}
             catch (bytes memory data) {
-                emit SlashingError(strategyId, msg.sender, staker, data);
+                emit SlashingError(lockerId, msg.sender, staker, data);
             }
         }
 
@@ -337,20 +334,20 @@ contract Hub {
 
     // ========== HELPERS ==========
 
-    /// @dev Reverts if Strategy IDs and the other inputs are not of the same length, a Strategy does not exist, or an other input is invalid.
-    /// @dev strategy ids must be sorted in ascending order for duplicate check
-    function _validateStrategyInputs(SlashingInput[] calldata strategies_) internal view {
+    /// @dev Reverts if Locker IDs and the other inputs are not of the same length, a Locker does not exist, or an other input is invalid.
+    /// @dev locker ids must be sorted in ascending order for duplicate check
+    function _validateLockerInputs(SlashingInput[] calldata lockers_) internal view {
         uint256 lastId;
-        uint256 len = strategies_.length;
+        uint256 len = lockers_.length;
         for (uint256 i = 0; i < len; ++i) {
-            uint256 strategyId = strategies_[i].strategyId;
-            require(strategyId > lastId, "Duplicate Strategy or Unsorted List");
-            require(strategies_[i].percentage <= 100, "Invalid slashing percentage");
+            uint256 lockerId = lockers_[i].lockerId;
+            require(lockerId > lastId, "Duplicate Locker or Unsorted List");
+            require(lockers_[i].percentage <= 100, "Invalid slashing percentage");
         }
-        require(lastId <= _strategyCounter, "Invalid Strategy");
+        require(lastId <= _lockerCounter, "Invalid Locker");
     }
 
-    function _initiateUnstaking(uint256 serviceId, uint256[] memory strategyIds, uint256[] calldata amountsOrIds)
+    function _initiateUnstaking(uint256 serviceId, uint256[] memory lockerIds, uint256[] calldata amountsOrIds)
         internal
         returns (bool finalized, uint256 finalizationTime)
     {
@@ -360,12 +357,12 @@ contract Hub {
         // Confirm the unstaking with the Service if the Staker will still be committed when the unstaking notice period has passed.
         // The Service can revert.
         if (subscriptions[msg.sender].viewCommitment(serviceId) + serviceData[serviceId].unstakingNoticePeriod > block.timestamp) {
-            finalizeImmediately = serviceData[serviceId].service.onInitializeUnstaking(msg.sender, strategyIds, amountsOrIds);
+            finalizeImmediately = serviceData[serviceId].service.onInitializeUnstaking(msg.sender, lockerIds, amountsOrIds);
         } else {
             // Let the Staker initiate unstaking if the Staker is no longer committed, or will no longer be committed after the unstaking notice period has passed.
             // Notify the Service that the Staker has unstaked.
             // Reverting not allowed.
-            try serviceData[serviceId].service.onInitializeUnstaking{gas: SERVICE_UNSTAKE_GAS}(msg.sender, strategyIds, amountsOrIds) returns (
+            try serviceData[serviceId].service.onInitializeUnstaking{gas: SERVICE_UNSTAKE_GAS}(msg.sender, lockerIds, amountsOrIds) returns (
                 bool finalizeImmediately_
             ) {
                 finalizeImmediately = finalizeImmediately_;
@@ -375,16 +372,16 @@ contract Hub {
         }
 
         // Finalize the unstaking if the Service chose to let the Staker unstake immediately.
-        if (finalizeImmediately) return _finalizeUnstaking(serviceId, strategyIds, amountsOrIds, true);
+        if (finalizeImmediately) return _finalizeUnstaking(serviceId, lockerIds, amountsOrIds, true);
 
         // Schedule the unstaking.
         uint256 scheduledTime = block.timestamp + serviceData[serviceId].unstakingNotice[msg.sender].scheduledTime;
-        serviceData[serviceId].unstakingNotice[msg.sender] = UnstakingNotice(strategyIds, amountsOrIds, scheduledTime);
+        serviceData[serviceId].unstakingNotice[msg.sender] = UnstakingNotice(lockerIds, amountsOrIds, scheduledTime);
 
         return (false, scheduledTime);
     }
 
-    function _finalizeUnstaking(uint256 serviceId, uint256[] memory strategyIds, uint256[] memory amountsOrIds, bool force)
+    function _finalizeUnstaking(uint256 serviceId, uint256[] memory lockerIds, uint256[] memory amountsOrIds, bool force)
         internal
         returns (bool finalized, uint256 finalizationTime)
     {
@@ -398,28 +395,28 @@ contract Hub {
 
         // Notify the Service that the Staker is unstaking.
         // Reverting not allowed.
-        try serviceData[serviceId].service.onFinalizeUnstaking{gas: SERVICE_UNSTAKE_GAS}(msg.sender, strategyIds, amountsOrIds) {}
+        try serviceData[serviceId].service.onFinalizeUnstaking{gas: SERVICE_UNSTAKE_GAS}(msg.sender, lockerIds, amountsOrIds) {}
         catch (bytes memory data) {
             emit UnstakingError(serviceId, msg.sender, data);
         }
 
-        // Review: Should we allow Strategies to revert here?
-        // Notify the Strategies that the Staker has unstaked.
+        // Review: Should we allow Lockers to revert here?
+        // Notify the Lockers that the Staker has unstaked.
         // Reverting not allowed.
-        // Note: We assume the Staker trust the Strategies not to revert by causing the call to run out of gas.
-        for (uint256 i; i < strategyIds.length; ++i) {
-            try strategyData[strategyIds[i]].strategy.onUnstake(msg.sender, serviceId, amountsOrIds[i]) {}
+        // Note: We assume the Staker trust the Lockers not to revert by causing the call to run out of gas.
+        for (uint256 i; i < lockerIds.length; ++i) {
+            try lockerData[lockerIds[i]].locker.onUnstake(msg.sender, serviceId, amountsOrIds[i]) {}
             catch (bytes memory data) {
-                emit UnstakingError(strategyIds[i], msg.sender, data);
+                emit UnstakingError(lockerIds[i], msg.sender, data);
             }
         }
 
         // Deactivate the subscription if the Staker doesn't have any more stake in the Service.
-        // Note: We assume the Service, which use the Strategies, trust them to report the Staker's balance in the Service correctly.
-        // Note: We assume the Staker trust the Strategies not to revert by causing the call to run out of gas.
+        // Note: We assume the Service, which use the Lockers, trust them to report the Staker's balance in the Service correctly.
+        // Note: We assume the Staker trust the Lockers not to revert by causing the call to run out of gas.
         bool stakeIsZero = true;
-        for (uint256 i; i < serviceData[serviceId].strategies.length; ++i) {
-            try strategyData[serviceData[serviceId].strategies[i]].strategy.balanceOfIn(msg.sender, serviceId) returns (uint256 balanceOfInService) {
+        for (uint256 i; i < serviceData[serviceId].lockers.length; ++i) {
+            try lockerData[serviceData[serviceId].lockers[i]].locker.balanceOfIn(msg.sender, serviceId) returns (uint256 balanceOfInService) {
                 if (balanceOfInService != 0) stakeIsZero = false;
             } catch {}
         }
@@ -432,5 +429,5 @@ contract Hub {
     }
 }
 
-// Review: What happens if, for example, a Strategy also registers as a Service that uses itself (the Strategy), and then subscribes to iteself, etc. We'll probably disallow this.
+// Review: What happens if, for example, a Locker also registers as a Service that uses itself (the Locker), and then subscribes to iteself, etc. We'll probably disallow this.
 // Review: Similarly with Stakers and Slashers.

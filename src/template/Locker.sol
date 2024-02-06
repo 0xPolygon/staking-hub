@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {IStrategy} from "../interface/IStrategy.sol";
+import {ILocker} from "../interface/ILocker.sol";
 
-/// @title Strategy
+/// @title Locker
 /// @author Polygon Labs
-/// @notice A Strategy holds and manages Stakers' funds.
-/// @notice A Staker deposits funds into the Strategy before subscribing to a Services that uses the Strategy.
-abstract contract Strategy is IStrategy {
+/// @notice A Locker holds and manages Stakers' funds.
+/// @notice A Staker deposits funds into the Locker before subscribing to a Services that uses the Locker.
+abstract contract Locker is ILocker {
     address public stakingHub;
 
     mapping(uint256 => uint256) public totalSupplies;
@@ -37,7 +37,7 @@ abstract contract Strategy is IStrategy {
         emit Slashed(user, amountOrId);
     }
 
-    /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Strategy.
+    /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Locker.
     /// @dev Triggered before `onRestake` on the Service.
     function onRestake(
         address staker,
@@ -54,7 +54,7 @@ abstract contract Strategy is IStrategy {
         emit Restaked(staker, service, lockingInUntil, amountOrId, maximumSlashingPercentage);
     }
 
-    /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Strategy.
+    /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
     /// @dev Triggered after `onUnstake` on the Service.
     function onUnstake(address staker, uint256 service, uint256 amountOrId) external override {
         require(msg.sender == stakingHub, "Only StakingHub can call this function.");

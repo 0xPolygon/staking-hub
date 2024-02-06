@@ -13,17 +13,15 @@ interface IService {
     /// @notice Performs all neccessary checks on the Staker (e.g., voting power, whitelist, BLS-key, etc.).
     /// @dev Called by the Hub when a Staker subscribes to the Service.
     /// @dev The Service can revert.
-    function onRestake(address staker, uint256[] calldata strategies, uint256[] calldata amountsOrIds, uint256 committingUntil) external;
+    function onRestake(address staker, uint256[] calldata lockers, uint256[] calldata amountsOrIds, uint256 committingUntil) external;
 
     /// @notice Lets a Staker unstake from the Service.
     /// @notice Performs all neccessary checks on the Staker.
     /// @notice A Service that requires unstaking notice may still choose allow the Staker to finalize the unstaking immediately.
     /// @dev Called by the Hub when a Staker unsubscribes from the Service.
     /// @dev The Service can revert when the subscription hasn't expired.
-    function onInitializeUnstaking(address staker, uint256[] calldata strategyIds, uint256[] calldata amountsOrIds)
-        external
-        returns (bool finalizeImmediately);
-    function onFinalizeUnstaking(address staker, uint256[] calldata strategyIds, uint256[] calldata amountsOrIds) external;
+    function onInitializeUnstaking(address staker, uint256[] calldata lockerIds, uint256[] calldata amountsOrIds) external returns (bool finalizeImmediately);
+    function onFinalizeUnstaking(address staker, uint256[] calldata lockerIds, uint256[] calldata amountsOrIds) external;
 
     /// @notice Functionality not defined.
     /// @dev Called by the Hub when a Staker has been frozen by a Slasher of the Service.
