@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity 0.8.24;
 
-import {StakingManager} from "./StakingManager.sol";
+import {StakingLayerManager, SlashingInput} from "./StakingLayerManager.sol";
+import {Subscriptions, SubscriptionsStd} from "../lib/SubscriptionsStd.sol";
 
 struct SlasherUpdate {
     address newSlasher;
     uint256 scheduledTime;
 }
 
-contract SlashingManager is StakingManager {
+contract SlashingManager is StakingLayerManager {
     mapping(uint256 serviceId => SlasherUpdate slasherUpdate) public slasherUpdates;
+    mapping(address staker => Subscriptions subscriptions) public subscriptions;
 
     // NOTE: Updated code through this line. Some logic and docs below may be outdated (except HELPERS)! TODO
 
@@ -90,7 +92,7 @@ contract SlashingManager is StakingManager {
                 }
             }
             // TODO: locker expects amount, not percentage
-            try lockerData[lockerId].locker.onSlash(staker, serviceId, percentage) {}
+            try lockerAddresses[lockerId].locker.onSlash(staker, serviceId, percentage) {}
             catch (bytes memory data) {
                 emit SlashingError(lockerId, msg.sender, staker, data);
             }

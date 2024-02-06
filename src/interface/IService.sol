@@ -13,7 +13,7 @@ interface IService {
     /// @notice Performs all neccessary checks on the Staker (e.g., voting power, whitelist, BLS-key, etc.).
     /// @dev Called by the Hub when a Staker subscribes to the Service.
     /// @dev The Service can revert.
-    function onRestake(address staker, uint256[] calldata lockers, uint256[] calldata amountsOrIds, uint256 committingUntil) external;
+    function onRestake(address staker) external;
 
     /// @notice Lets a Staker unstake from the Service.
     /// @notice Performs all neccessary checks on the Staker.

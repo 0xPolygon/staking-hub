@@ -42,6 +42,7 @@ contract StakingLayerManager is StakingLayerStorage {
     /// @notice Adds a new Locker to the Hub.
     /// @dev Called by the Locker.
     function registerLocker() external returns (uint256 id) {
+        // TODO check if contract
         require(lockers[msg.sender] == 0, "Locker already registered");
 
         // Add the Locker.
@@ -56,22 +57,24 @@ contract StakingLayerManager is StakingLayerStorage {
     /// @param lockers_.percentage Use `0` or `100` for ERC-721 tokens.
     /// @dev Called by the Service.
     function registerService(SlashingInput[] calldata lockers_, uint256 unstakingNoticePeriod, address slasher) external returns (uint256 id) {
+        // TODO check if contract
         require(services[msg.sender] == 0, "Service already registered");
-        require(lockers_.length < 33, "Limit Lockers to 32");
+        require(lockers_.length < 33 && lockers_.length != 0, "Invalid amount of lockers");
         _validateLockerInputs(lockers_);
 
         // Add the Service.
         id = ++_serviceCounter;
         services[msg.sender] = id;
-        serviceData[id].service = IService(msg.sender);
+        ServiceData storage data = serviceData[id];
+        data.service = IService(msg.sender);
         uint256 slashingPercentages;
         for (uint256 i; i < lockers_.length; ++i) {
-            serviceData[id].lockers.push(lockers_[i].lockerId);
+            data.lockers.push(lockers_[i].lockerId);
             slashingPercentages = slashingPercentages.set(lockers_[i].percentage, i);
         }
-        serviceData[id].slashingPercentages = slashingPercentages;
-        serviceData[id].unstakingNoticePeriod = unstakingNoticePeriod;
-        serviceData[id].slasher = slasher;
+        data.slashingPercentages = slashingPercentages;
+        data.unstakingNoticePeriod = unstakingNoticePeriod;
+        data.slasher = slasher;
 
         emit ServiceRegistered(msg.sender, id);
     }
@@ -84,7 +87,7 @@ contract StakingLayerManager is StakingLayerStorage {
         for (uint256 i = 0; i < len; ++i) {
             uint256 lockerId = lockers_[i].lockerId;
             require(lockerId > lastId, "Duplicate Locker or Unsorted List");
-            require(lockers_[i].percentage <= 100, "Invalid slashing percentage");
+            require(lockers_[i].percentage < 101, "Invalid slashing percentage");
         }
         require(lastId <= _lockerCounter, "Invalid Locker");
     }

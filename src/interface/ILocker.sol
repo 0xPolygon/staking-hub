@@ -10,11 +10,11 @@ interface ILocker {
 
     /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Locker.
     /// @dev Triggered before `onRestake` on the Service.
-    function onRestake(address staker, uint256 service, uint256 amountOrId, uint256 committingUntil, uint8 maximumSlashingPercentage) external;
+    function onRestake(address staker, uint256 service, uint256 amountOrId, uint8 maxSlashingPercentage) external returns (uint256 newStake);
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
     /// @dev Triggered after `onUnstake` on the Service.
-    function onUnstake(address staker, uint256 service, uint256 amountOrId) external;
+    function onUnstake(address staker, uint256 service, uint256 amountOrId) external returns (uint256 remainingStake);
 
     /// @notice Takes a portion of a Staker's funds away.
     /// @dev Called by the Hub when a Staker has been slashed by a Slasher of a Service that uses the Locker.
