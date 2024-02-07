@@ -5,15 +5,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {Locker} from "../template/Locker.sol";
-import {Hub} from "../Hub.sol";
 
 /// @title ERC20Locker
 /// @author Polygon Labs
 /// @notice An ERC20-compatible abstract template contract inheriting from BaseLocker
 abstract contract ERC20Locker is ERC20Burnable, Locker {
     IERC20 public immutable underlying; // Must not allow reentrancy
-
-    // TODO add events
 
     constructor(IERC20 _underlying, string memory name, string memory symbol, address _stakingHub) ERC20(name, symbol) Locker(_stakingHub) {
         underlying = _underlying;
@@ -49,7 +46,7 @@ abstract contract ERC20Locker is ERC20Burnable, Locker {
 
     /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Locker.
     /// @dev Triggered before `onRestake` on the Service.
-    function _onRestake(address staker, uint256 service, uint256 lockingInUntil, uint256 stakingAmount, uint8 maximumSlashingPercentage) internal override {}
+    function _onRestake(address staker, uint256 service, uint256 stakingAmount, uint8 maximumSlashingPercentage) internal override {}
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
     /// @dev Triggered after `onUnstake` on the Service.
