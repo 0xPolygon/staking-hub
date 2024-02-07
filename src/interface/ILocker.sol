@@ -26,5 +26,6 @@ interface ILocker {
     function balanceOf(address staker) external view returns (uint256 balanceInLocker);
 
     /// @return balanceInService The amount of funds from the Locker the Staker has staked in a Service.
+    /// @dev MUST query `getSlashableStake` on the Staking Layer and subtract the returned amount.
     function balanceOfIn(address staker, uint256 service) external view returns (uint256 balanceInService);
 }
