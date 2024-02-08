@@ -14,7 +14,7 @@ abstract contract LockerManager is IStakingLayer {
     LockerStorage internal _lockerStorage;
 
     function _setLocker(address newLocker) internal returns (uint256 id) {
-        // TODO check if locker is contract
+        require(newLocker.code.length != 0, "Locker contract not found");
         require(_lockerStorage.ids[newLocker] == 0, "Locker already registered");
         id = ++_lockerStorage.counter;
         _lockerStorage.ids[newLocker] = id;

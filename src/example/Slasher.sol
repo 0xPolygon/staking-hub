@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {ISlasher} from "./interface/ISlasher.sol";
-import {Hub} from "../Hub.sol";
+import {SlashingInput, StakingLayer} from "../StakingLayer.sol";
 
 /// @title Slasher Example With Double Signing
 /// @author Polygon Labs
@@ -10,18 +10,18 @@ import {Hub} from "../Hub.sol";
 contract Slasher is ISlasher {
     address immutable service;
     uint256 immutable serviceId;
-    Hub immutable hub;
+    StakingLayer immutable stakingLayer;
 
     /// @notice amount of time the staker has to prove their innocence.
     uint256 public constant GRACE_PERIOD = 4 days;
 
     mapping(address => uint256) public gracePeriodEnds;
 
-    constructor(Hub hub_) {
+    constructor(StakingLayer stakingLayer_) {
         // deployed by service in this example
-        hub = hub_;
+        stakingLayer = stakingLayer_;
         service = msg.sender;
-        serviceId = hub_.services(msg.sender);
+        serviceId = stakingLayer_.services(msg.sender);
     }
 
     function freeze(address staker, bytes calldata proof) public {
@@ -31,7 +31,7 @@ contract Slasher is ISlasher {
 
         gracePeriodEnds[staker] = block.timestamp + GRACE_PERIOD;
 
-        hub.onFreeze(serviceId, staker);
+        stakingLayer.onFreeze(serviceId, staker);
     }
 
     function unfreeze(address staker) public {
@@ -40,7 +40,7 @@ contract Slasher is ISlasher {
 
         delete gracePeriodEnds[staker];
 
-        hub.onUnfreeze(serviceId, staker);
+        stakingLayer.onUnfreeze(serviceId, staker);
     }
 
     function proveInnocence(bytes calldata proof) public {
@@ -49,7 +49,7 @@ contract Slasher is ISlasher {
 
         if (_verifyProof(msg.sender, proof)) {
             delete gracePeriodEnds[msg.sender];
-            hub.onUnfreeze(serviceId, msg.sender);
+            stakingLayer.onUnfreeze(serviceId, msg.sender);
         } else {
             revert("Slasher: Proof Invalid");
         }
@@ -61,12 +61,12 @@ contract Slasher is ISlasher {
 
         delete gracePeriodEnds[staker];
 
-        Hub.SlashingInput memory slashingInputs = Hub.SlashingInput({lockerId: 1, percentage: percentage});
+        SlashingInput memory slashingInputs = SlashingInput({lockerId: 1, percentage: percentage});
 
-        Hub.SlashingInput[] memory input = new Hub.SlashingInput[](1);
+        SlashingInput[] memory input = new SlashingInput[](1);
         input[0] = slashingInputs;
 
-        hub.onSlash(serviceId, staker, input);
+        stakingLayer.onSlash(serviceId, staker, input);
     }
 
     function _verifyProof(address, bytes calldata) internal pure returns (bool) {

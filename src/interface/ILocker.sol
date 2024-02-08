@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
+// TODO Is it outdated?
 /// @title Locker
 /// @author Polygon Labs
 /// @notice A Locker holds and manages Stakers' funds.

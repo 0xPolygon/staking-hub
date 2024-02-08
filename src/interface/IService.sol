@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-// TODO Update docs.
+// TODO Is it outdated?
 /// @title Service
 /// @author Polygon Labs
 /// @notice A Service represents a network.

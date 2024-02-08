@@ -25,10 +25,9 @@ abstract contract ServiceManager is StakerManager {
     ServiceStorage internal _services;
 
     function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint40 unstakingNoticePeriod) internal returns (uint256 id) {
+        require(service.code.length != 0, "Service contract not found");
         require(_services.ids[service] == 0, "Service already registered");
-        // NOTE we should probably require a notice period > 0, so that a malicious staker cannot frontrun a slashing event by unstaking immediately
         require(unstakingNoticePeriod > 0, "Invalid notice period");
-
         id = ++_services.counter;
         _services.ids[service] = id;
         _services.data[id] = Service(service, lockers, slashingPercentages, unstakingNoticePeriod);
@@ -38,7 +37,6 @@ abstract contract ServiceManager is StakerManager {
     function _formatLockers(SlashingInput[] calldata lockers) internal view returns (uint256[] memory formatted, uint256 slashingPercentages) {
         _validateLockers(lockers);
         uint256 len = lockers.length;
-        require(len > 0, "No lockers provided");
         formatted = new uint256[](len);
         for (uint256 i; i < len; ++i) {
             formatted[i] = lockers[i].lockerId;
@@ -46,15 +44,13 @@ abstract contract ServiceManager is StakerManager {
         }
     }
 
-    /// @dev Reverts if a Locker does not exist, or a duplicate is found.
-    /// @dev locker ids must be sorted in ascending order for duplicate check
     function _validateLockers(SlashingInput[] calldata lockers) private view {
         uint256 len = lockers.length;
         if (len == 0 || len > 32) revert("Invalid number of lockers");
         uint256 lastId;
         for (uint256 i = 0; i < len; ++i) {
             uint256 lockerId_ = lockers[i].lockerId;
-            require(lockerId_ > lastId, "Duplicate Locker or Unsorted List");
+            require(lockerId_ > lastId, "Duplicate Locker or unsorted list");
             require(lockers[i].percentage < 101, "Invalid slashing percentage");
         }
         require(lastId <= _lockerStorage.counter, "Invalid Locker");

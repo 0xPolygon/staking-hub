@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity 0.8.24;
 
-import {SlashingManager} from "./StakingLayer/SlashingManager.sol";
+import {SlashingManager} from "./staking-layer/SlashingManager.sol";
 import {SlashingInput} from "./interface/IStakingLayer.sol";
 import {PackedUints} from "./lib/PackedUints.sol";
 
