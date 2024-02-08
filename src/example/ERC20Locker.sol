@@ -58,4 +58,6 @@ abstract contract ERC20Locker is ERC20Burnable, Locker {
     function _onSlash(address user, uint256 service, uint256 amount) internal override {
         _burn(user, amount);
     }
+
+    function totalSupply() public view override(ERC20, Locker) returns (uint256) {}
 }

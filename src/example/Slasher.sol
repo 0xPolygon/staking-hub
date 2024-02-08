@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
+/*
 import {ISlasher} from "./interface/ISlasher.sol";
 import {SlashingInput, StakingLayer} from "../StakingLayer.sol";
 
@@ -74,3 +75,4 @@ contract Slasher is ISlasher {
         return true;
     }
 }
+*/

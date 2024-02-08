@@ -45,7 +45,7 @@ abstract contract Locker is ILocker {
         uint256 lockingInUntil, // review not required here, keep it?
         uint256 amountOrId,
         uint8 maximumSlashingPercentage
-    ) external override {
+    ) external {
         require(msg.sender == stakingHub, "Only StakingHub can call this function.");
 
         totalSupplies[service] += amountOrId;
@@ -56,7 +56,7 @@ abstract contract Locker is ILocker {
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
     /// @dev Triggered after `onUnstake` on the Service.
-    function onUnstake(address staker, uint256 service, uint256 amountOrId) external override {
+    function onUnstake(address staker, uint256 service, uint256 amountOrId) external {
         require(msg.sender == stakingHub, "Only StakingHub can call this function.");
 
         totalSupplies[service] -= amountOrId;
@@ -64,4 +64,6 @@ abstract contract Locker is ILocker {
         _onUnstake(staker, service, amountOrId);
         emit Unstaked(staker, service, amountOrId);
     }
+
+    function totalSupply() public view virtual returns (uint256) {}
 }
