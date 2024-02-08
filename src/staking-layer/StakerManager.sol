@@ -3,17 +3,15 @@ pragma solidity 0.8.24;
 
 import {LockerManager} from "./LockerManager.sol";
 
+// NOTE Unused
 struct Staker {
     uint216 subscriptionCount;
-    // TODO invariant test that frozenUntil is always >= any subscription.frozenUntil
-    uint40 frozenUntil;
-    uint40 freezeCount;
 }
 
 struct Subscription {
     bool subscribed;
-    uint40 commitUntil;
-    uint40 unstakeScheduledFor;
+    uint40 lockedInUntil;
+    uint40 unsubscribableFrom;
     uint40 frozenUntil;
 }
 
@@ -25,38 +23,37 @@ abstract contract StakerManager is LockerManager {
 
     StakerStorage internal _stakers;
 
-    function _restake(address staker, uint256 service, uint40 commitUntil) internal {
-        require(commitUntil > block.timestamp, "Invalid commit time");
+    function _subscribe(address staker, uint256 service, uint40 lockedInUntil) internal {
         Subscription storage sub = _stakers.subscriptions[staker][service];
         require(!sub.subscribed, "Already subscribed");
-        _stakers.subscriptions[staker][service] = Subscription(true, commitUntil, 0, 0);
+        require(lockedInUntil > block.timestamp, "Invalid subscription term");
+        _stakers.subscriptions[staker][service] = Subscription(true, lockedInUntil, 0, 0);
         ++_stakers.data[staker].subscriptionCount;
-        emit Restaked(staker, service, commitUntil);
+        emit Restaked(staker, service, lockedInUntil);
     }
 
-    function _initiateUnstaking(address staker, uint256 service) internal {
+    function _cancelSubscription(address staker, uint256 service) internal {
         Subscription storage sub = _stakers.subscriptions[staker][service];
         require(sub.subscribed, "Not subscribed");
-        require(sub.unstakeScheduledFor == 0, "Unstake already scheduled");
-        sub.unstakeScheduledFor = uint40(block.timestamp + _unstakingNotice(service));
+        require(sub.unsubscribableFrom == 0, "Subscription already canceled");
+        sub.unsubscribableFrom = uint40(block.timestamp + _cancelationPeriod(service));
         emit UnstakingInitiated(staker, service);
     }
 
-    function _finaliseUnstaking(address staker, uint256 service) internal {
+    function _unsubscribe(address staker, uint256 service) internal {
         Subscription storage sub = _stakers.subscriptions[staker][service];
         require(sub.subscribed, "Not subscribed");
-        uint256 unscheduledFor = sub.unstakeScheduledFor;
-        require(unscheduledFor != 0, "Unstake not scheduled");
-        require(block.timestamp > unscheduledFor, "Unstake not due");
+        require(sub.unsubscribableFrom != 0, "Subscription not canceled");
+        require(block.timestamp > sub.unsubscribableFrom, "Cancelation hasn't taken effect");
         sub.subscribed = false;
-        sub.unstakeScheduledFor = 0;
+        sub.unsubscribableFrom = 0;
         --_stakers.data[staker].subscriptionCount;
         emit Unstaked(staker, service);
     }
 
-    function _isCommittedTo(address staker, uint256 service) internal view virtual returns (bool) {
-        return _stakers.subscriptions[staker][service].commitUntil > block.timestamp;
+    function _isLockedIn(address staker, uint256 service) internal view virtual returns (bool) {
+        return _stakers.subscriptions[staker][service].lockedInUntil > block.timestamp;
     }
 
-    function _unstakingNotice(uint256 service) internal view virtual returns (uint40 notice);
+    function _cancelationPeriod(uint256 service) internal view virtual returns (uint40 notice);
 }

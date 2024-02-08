@@ -24,6 +24,7 @@ abstract contract LockerManager is IStakingLayer {
 
     function lockerId(address lockerAddr) public view returns (uint256 id) {
         id = _lockerStorage.ids[lockerAddr];
+        require(id != 0, "Locker not registered");
     }
 
     function locker(uint256 id) public view returns (ILocker locker_) {

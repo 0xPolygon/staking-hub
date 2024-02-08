@@ -13,7 +13,7 @@ abstract contract ServiceManager is StakerManager {
         address service;
         uint256[] lockers;
         uint256 slashingPercentages;
-        uint40 unstakingNoticePeriod;
+        uint40 cancelationPeriod;
     }
 
     struct ServiceStorage {
@@ -24,13 +24,13 @@ abstract contract ServiceManager is StakerManager {
 
     ServiceStorage internal _services;
 
-    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint40 unstakingNoticePeriod) internal returns (uint256 id) {
+    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint40 cancelationPeriod) internal returns (uint256 id) {
         require(service.code.length != 0, "Service contract not found");
         require(_services.ids[service] == 0, "Service already registered");
-        require(unstakingNoticePeriod > 0, "Invalid notice period");
+        require(cancelationPeriod > 0, "Invalid cancelation period");
         id = ++_services.counter;
         _services.ids[service] = id;
-        _services.data[id] = Service(service, lockers, slashingPercentages, unstakingNoticePeriod);
+        _services.data[id] = Service(service, lockers, slashingPercentages, cancelationPeriod);
         emit ServiceRegistered(service, id);
     }
 
@@ -53,7 +53,7 @@ abstract contract ServiceManager is StakerManager {
             require(lockerId_ > lastId, "Duplicate Locker or unsorted list");
             require(lockers[i].percentage < 101, "Invalid slashing percentage");
         }
-        require(lastId <= _lockerStorage.counter, "Invalid Locker");
+        require(lastId <= _lockerStorage.counter, "Invalid locker");
     }
 
     function _serviceId(address service) internal view returns (uint256 id) {
@@ -78,8 +78,8 @@ abstract contract ServiceManager is StakerManager {
         percentage = _services.data[id].slashingPercentages.get(index);
     }
 
-    function _unstakingNotice(uint256 id) internal view override returns (uint40 notice) {
-        notice = _services.data[id].unstakingNoticePeriod;
+    function _cancelationPeriod(uint256 id) internal view override returns (uint40 notice) {
+        notice = _services.data[id].cancelationPeriod;
     }
 
     function _isSubscribed(address staker, uint256 id) internal view returns (bool) {
