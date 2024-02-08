@@ -67,7 +67,7 @@ abstract contract SlashingManager is ServiceManager {
     function _freeze(address staker, address slasher) internal {
         uint256 service = _slashers.services[slasher];
         require(_isSubscribed(staker, service), "Not subscribed");
-        require(_slashers.data[staker].serviceData[service].frozen == false, "Already frozen by this service");
+        require(!_isFrozenBy(staker, service), "Already frozen by this service");
         Slashing storage data = _slashers.data[staker];
         uint40 end = uint40(block.timestamp + STAKER_FREEZE_PERIOD);
         data.freezeEnd = end;
@@ -78,7 +78,7 @@ abstract contract SlashingManager is ServiceManager {
     function _slash(address staker, address slasher, uint8[] calldata percentages) internal {
         uint256 service = _slashers.services[slasher];
         require(_isSubscribed(staker, service), "Not subscribed");
-        require(_isFrozen(staker), "Staker not frozen");
+        require(_isFrozenBy(staker, service), "Staker not frozen by this service");
         uint256[] memory lockers = _services.data[service].lockers;
         uint256 len = lockers.length;
         require(len == percentages.length, "Invalid number of percentages");
@@ -107,6 +107,10 @@ abstract contract SlashingManager is ServiceManager {
 
     function _isFrozen(address staker) internal view returns (bool) {
         return _slashers.data[staker].freezeEnd > block.timestamp;
+    }
+
+    function _isFrozenBy(address staker, uint256 service) internal view returns (bool) {
+        return _slashers.data[staker].serviceData[service].frozen;
     }
 
     function _isCommittedTo(address staker, uint256 service) internal view override returns (bool) {
