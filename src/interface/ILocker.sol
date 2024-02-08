@@ -10,22 +10,23 @@ interface ILocker {
 
     /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Locker.
     /// @dev Triggered before `onRestake` on the Service.
-    function onRestake(address staker, uint256 service, uint256 amountOrId, uint8 maxSlashingPercentage) external returns (uint256 newStake);
+    function onRestake(address staker, uint256 service, uint8 maxSlashingPercentage) external;
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
     /// @dev Triggered after `onUnstake` on the Service.
-    function onUnstake(address staker, uint256 service, uint256 amountOrId) external returns (uint256 remainingStake);
-
-    /// @notice Takes a portion of a Staker's funds away.
-    /// @dev Called by the Hub when a Staker has been slashed by a Slasher of a Service that uses the Locker.
-    function onSlash(address staker, uint256 service, uint256 amountOrId) external;
+    function onUnstake(address staker, uint256 service, uint8 maxSlashingPercentage) external;
 
     // ========== QUERIES ==========
 
-    /// @return balanceInLocker The amount of funds the Staker has in the Locker.
-    function balanceOf(address staker) external view returns (uint256 balanceInLocker);
+    /// @return amount underlying balance of deposited stake
+    function balanceOf(address staker) external view returns (uint256 amount);
 
-    /// @return balanceInService The amount of funds from the Locker the Staker has staked in a Service.
-    /// @dev MUST query `getSlashableStake` on the Staking Layer and subtract the returned amount.
-    function balanceOfIn(address staker, uint256 service) external view returns (uint256 balanceInService);
+    /// @return votingPower representation of voting power of the staker
+    function votingPowerOf(address staker) external view returns (uint256 votingPower);
+
+    /// @return totalSupply total supply of underlying asset deposited into locker
+    function totalSupply() external view returns (uint256);
+
+    /// @return totalVotingPower total voting power of all stakers
+    function totalVotingPower() external view returns (uint256);
 }
