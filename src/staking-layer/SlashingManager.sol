@@ -15,10 +15,17 @@ struct ServiceSlashingData {
     uint256 slashedPercentages;
 }
 
+struct LockerSlashes {
+    uint216 latestNonce;
+    uint8 percentage;
+    uint8 previouslySlashed;
+}
+
 struct Slashing {
     uint40 freezeEnd;
-    mapping(uint256 locker => uint8) totalSlashed;
-    mapping(uint256 service => ServiceSlashingData) serviceData;
+    uint216 nonce;
+    mapping(uint256 locker => LockerSlashes) totalSlashed;
+    mapping(uint256 nonce => mapping(uint256 service => ServiceSlashingData)) serviceData;
 }
 
 abstract contract SlashingManager is ServiceManager {
@@ -69,9 +76,11 @@ abstract contract SlashingManager is ServiceManager {
         require(_isSubscribed(staker, service), "Not subscribed");
         require(!_isFrozenBy(staker, service), "Already frozen by this service");
         Slashing storage data = _slashers.data[staker];
+        uint216 nonce = _getNonce(staker);
+        data.nonce = nonce;
         uint40 end = uint40(block.timestamp + STAKER_FREEZE_PERIOD);
         data.freezeEnd = end;
-        _slashers.data[staker].serviceData[service].frozen = true;
+        _slashers.data[staker].serviceData[nonce][service].frozen = true;
         emit StakerFrozen(staker, service, end);
     }
 
@@ -83,7 +92,9 @@ abstract contract SlashingManager is ServiceManager {
         uint256 len = lockers.length;
         require(len == percentages.length, "Invalid number of percentages");
         uint256 maxSlashingPercentages = _services.data[service].slashingPercentages;
-        uint256 currentSlashingPercentages = _slashers.data[staker].serviceData[service].slashedPercentages;
+        uint216 nonce = _getNonce(staker);
+        ServiceSlashingData storage serviceData = _slashers.data[staker].serviceData[nonce][service];
+        uint256 currentSlashingPercentages = serviceData.slashedPercentages;
         for (uint256 i; i < len; ++i) {
             uint8 percentage = percentages[i];
             if (percentage == 0) continue;
@@ -93,16 +104,35 @@ abstract contract SlashingManager is ServiceManager {
                 revert("Slashing exceeds maximum");
             }
             currentSlashingPercentages.set(currentPercentage + percentage, i);
-            uint8 totalSlashed = _slashers.data[staker].totalSlashed[locker_] + percentage;
-            if (totalSlashed > 100) totalSlashed = 100;
-            _slashers.data[staker].totalSlashed[locker_] = uint8(totalSlashed);
+            _applySlashing(locker_, staker, percentage, nonce);
             emit StakerSlashed(staker, service, locker_, percentage);
         }
-        _slashers.data[staker].serviceData[service].slashedPercentages = currentSlashingPercentages;
+        serviceData.slashedPercentages = currentSlashingPercentages;
     }
 
+    function _applySlashing(uint256 locker_, address staker, uint8 percentage, uint216 currentNonce) internal {
+        LockerSlashes memory slashes = _slashers.data[staker].totalSlashed[locker_];
+        if (currentNonce > slashes.latestNonce) {
+            slashes.latestNonce = currentNonce;
+            slashes.previouslySlashed = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
+            slashes.percentage = 0;
+        }
+        slashes.percentage += percentage;
+        if (slashes.percentage > 100) slashes.percentage = 100;
+        _slashers.data[staker].totalSlashed[locker_] = slashes;
+    }
+
+    // TODO: invariant test, can never exceed 100%
     function _slashingInfo(uint256 lockerId_, address staker) internal view returns (uint8 percentage) {
-        percentage = _slashers.data[staker].totalSlashed[lockerId_];
+        LockerSlashes memory slashes = _slashers.data[staker].totalSlashed[lockerId_];
+        percentage = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
+    }
+
+    function _applySlashing(uint256 lockerId_, address staker) internal {
+        LockerSlashes storage slashes = _slashers.data[staker].totalSlashed[lockerId_];
+        slashes.previouslySlashed = 0;
+        slashes.percentage = 0;
+        // TODO: emit event
     }
 
     function _isFrozen(address staker) internal view returns (bool) {
@@ -110,10 +140,21 @@ abstract contract SlashingManager is ServiceManager {
     }
 
     function _isFrozenBy(address staker, uint256 service) internal view returns (bool) {
-        return _slashers.data[staker].serviceData[service].frozen;
+        return _slashers.data[staker].serviceData[_getNonce(staker)][service].frozen;
     }
 
     function _isCommittedTo(address staker, uint256 service) internal view override returns (bool) {
         return super._isCommittedTo(staker, service) && _slashers.slashers[service].scheduledTime == 0;
+    }
+
+    function _getNonce(address staker) private view returns (uint216 nonce) {
+        nonce = _slashers.data[staker].nonce;
+        if (_slashers.data[staker].freezeEnd < block.timestamp) {
+            nonce += 1;
+        }
+    }
+
+    function _combineSlashingPeriods(uint8 oldSlashing, uint8 newSlashing) internal pure returns (uint8) {
+        return oldSlashing + ((100 - oldSlashing) * newSlashing) / 100;
     }
 }
