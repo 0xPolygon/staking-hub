@@ -80,7 +80,7 @@ abstract contract SlashingManager is ServiceManager {
         require(!_isFrozenBy(staker, service), "Already frozen by this service");
         Slashing storage data = _slashers.data[staker];
         uint216 nonce = _getNonce(staker);
-        data.nonce = nonce;
+        data.nonce = nonce; // the nonce gets updated on freezing
         uint40 end = uint40(block.timestamp + STAKER_FREEZE_PERIOD);
         data.freezeEnd = end;
         _slashers.data[staker].serviceData[nonce][service].frozen = true;
@@ -130,9 +130,52 @@ abstract contract SlashingManager is ServiceManager {
         _slashers.data[staker].totalSlashed[locker_] = slashes;
     }
 
-    // TODO: invariant test, can never exceed 100%  ❌ it cannot
-    // This reports the real-time amount
-    function _slashingInfo(uint256 lockerId_, address staker) internal view returns (uint8 percentage) {
+    // N    staker nonce
+    // n    per-locker-data-updated-at nonce
+    // c    percentage per locker for current freeze period
+    // t    percentage per locker for previous freeze periods
+
+    // N n   c    t
+    // 0 0   0    0
+    // freeze                   (N up)
+    // 1 0   0    0
+    // slash                    (n up, consolidate t c, add c)
+    // 1 1 665    0
+    // slash                    (add c)
+    // 1 1 666    0
+    // *period ends*
+    // freeze                   (N up)
+    // 2 1 666    0
+    // slash                    (n up, consolidate t c, add c)
+    // 2 2 333  666
+    // slash                    (add c)
+    // 2 2 334  666
+    // *period ends*
+
+    // info:
+    //  not frozen?
+    //      just consolidate t
+    //  frozen? N went up
+    //      check if t consolidated
+    //          n == N
+    //              ret t
+    //          n != N
+    //              consolidate t
+
+    function _laggingSlashedPercentage(uint256 lockerId_, address staker) internal view returns (uint8 percentage) {
+        LockerSlashes memory slashes = _slashers.data[staker].totalSlashed[lockerId_];
+        if (!_isFrozen(staker)) {
+            percentage = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
+        } else {
+            if (slashes.latestNonce == _slashers.data[staker].nonce) {
+                percentage = slashes.previouslySlashed;
+            } else {
+                percentage = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
+            }
+        }
+    }
+
+    function _coincidentSlashedPercentage(uint256 lockerId_, address staker) internal view returns (uint8 percentage) {
         LockerSlashes memory slashes = _slashers.data[staker].totalSlashed[lockerId_];
         percentage = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
     }

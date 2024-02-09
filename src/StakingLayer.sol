@@ -79,11 +79,11 @@ contract StakingLayer is SlashingManager {
         _slash(staker, msg.sender, percentages);
     }
 
-    function confirmBurning(address staker) external {
-        _confirmBurning(lockerId(msg.sender), staker);
+    function slashedPercentage(uint256 lockerId_, address staker) external view returns (uint8 percentage) {
+        return _laggingSlashedPercentage(lockerId_, staker);
     }
 
-    function slashingInfo(uint256 lockerId_, address staker) external view returns (uint8 percentage) {
-        return _slashingInfo(lockerId_, staker);
+    function confirmBurning(address staker) external {
+        _confirmBurning(lockerId(msg.sender), staker);
     }
 }
