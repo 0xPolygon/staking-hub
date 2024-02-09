@@ -37,7 +37,7 @@ contract StakingLayer is SlashingManager {
         } else {
             try _service(service).onCancelSubscription(msg.sender) {}
             catch (bytes memory revertData) {
-                emit SubscriptionCancelingWarning(service, msg.sender, revertData);
+                emit SubscriptionCancelationWarning(service, msg.sender, revertData);
             }
         }
     }
@@ -49,7 +49,7 @@ contract StakingLayer is SlashingManager {
         } else {
             try _service(service).onUnsubscribe(msg.sender) {}
             catch (bytes memory revertData) {
-                emit UnsubscribingWarning(service, msg.sender, revertData);
+                emit UnsubscriptionWarning(service, msg.sender, revertData);
             }
         }
         uint256[] memory lockers = _lockers(service);

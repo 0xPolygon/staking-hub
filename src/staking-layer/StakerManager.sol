@@ -29,7 +29,7 @@ abstract contract StakerManager is LockerManager {
         require(lockedInUntil > block.timestamp, "Invalid subscription term");
         _stakers.subscriptions[staker][service] = Subscription(true, lockedInUntil, 0, 0);
         ++_stakers.data[staker].subscriptionCount;
-        emit Restaked(staker, service, lockedInUntil);
+        emit Subscribed(staker, service, lockedInUntil);
     }
 
     function _cancelSubscription(address staker, uint256 service) internal {
@@ -37,7 +37,7 @@ abstract contract StakerManager is LockerManager {
         require(sub.subscribed, "Not subscribed");
         require(sub.unsubscribableFrom == 0, "Subscription already canceled");
         sub.unsubscribableFrom = uint40(block.timestamp + _cancelationPeriod(service));
-        emit UnstakingInitiated(staker, service);
+        emit SubscriptionCanceled(staker, service);
     }
 
     function _unsubscribe(address staker, uint256 service) internal {
@@ -48,7 +48,7 @@ abstract contract StakerManager is LockerManager {
         sub.subscribed = false;
         sub.unsubscribableFrom = 0;
         --_stakers.data[staker].subscriptionCount;
-        emit Unstaked(staker, service);
+        emit Unsubscribed(staker, service);
     }
 
     function _isLockedIn(address staker, uint256 service) internal view virtual returns (bool) {
