@@ -2,14 +2,14 @@
 pragma solidity 0.8.24;
 
 import {ILocker} from "../interface/ILocker.sol";
-import {StakingLayer} from "../StakingLayer/StakingLayer.sol";
+import {StakingLayer} from "../StakingLayer.sol";
 
 /// @title Locker
 /// @author Polygon Labs
 /// @notice A Locker holds and manages Stakers' funds.
 /// @notice A Staker deposits funds into the Locker before subscribing to a Services that uses the Locker.
 abstract contract Locker is ILocker {
-    StakingLayer public stakingHub;
+    address internal immutable _stakingLayer;
 
     mapping(uint256 => uint256) public totalSupplies;
     mapping(address staker => mapping(uint256 service => uint256 balance)) public balancesIn;
@@ -22,11 +22,11 @@ abstract contract Locker is ILocker {
     event Unstaked(address staker, uint256 service, uint256 amountOrId);
     event Slashed(address staker, uint256 service, uint256 amountOrId);
 
-    constructor(address _stakingHub) {
-        stakingHub = _stakingHub;
+    constructor(address stakingLayer) {
+        _stakingLayer = stakingLayer;
 
         // register
-        stakingHub.registerLocker();
+        StakingLayer(_stakingLayer).registerLocker();
     }
 
     // FUNCTIONS TO IMPLEMENT
@@ -37,7 +37,7 @@ abstract contract Locker is ILocker {
 
     /// @dev Triggered by the Hub when a staker gets slashed on penalized
     function onSlash(address user, uint256 service, uint256 amountOrId) external {
-        require(msg.sender == stakingHub, "Only StakingHub can call this function.");
+        require(msg.sender == _stakingLayer, "Only StakingHub can call this function.");
 
         totalSupplies[service] -= amountOrId;
 
@@ -47,13 +47,8 @@ abstract contract Locker is ILocker {
 
     /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Locker.
     /// @dev Triggered before `onRestake` on the Service.
-    function onRestake(
-        address staker,
-        uint256 service,
-        uint256 amountOrId,
-        uint8 maxSlashingPercentage
-    ) external override returns (uint256 newStake) {
-        require(msg.sender == stakingHub, "Only StakingHub can call this function.");
+    function onSubscribe(address staker, uint256 service, uint256 amountOrId, uint8 maxSlashingPercentage) external returns (uint256 newStake) {
+        require(msg.sender == _stakingLayer, "Only Staking Layer can call this function.");
         enforceRestakingLimit(staker, service, amountOrId, maxSlashingPercentage);
 
         totalSupplies[service] += amountOrId;
@@ -68,12 +63,8 @@ abstract contract Locker is ILocker {
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
     /// @dev Triggered after `onUnstake` on the Service.
-<<<<<<< HEAD
-    function onUnstake(address staker, uint256 service, uint256 amountOrId) external {
-=======
-    function onUnstake(address staker, uint256 service, uint256 amountOrId) external override returns (uint256 remainingStake) {
->>>>>>> dev
-        require(msg.sender == stakingHub, "Only StakingHub can call this function.");
+    function onUnsubscribe(address staker, uint256 service, uint256 amountOrId) external returns (uint256 remainingStake) {
+        require(msg.sender == _stakingLayer, "Only Staking Layer can call this function.");
 
         balancesIn[staker][service] -= amountOrId;
 
@@ -96,7 +87,7 @@ abstract contract Locker is ILocker {
     function enforceRestakingLimit(address staker, uint256 service, uint256 amount, uint8 maximumSlashingPercentage) private {
         // remember slash % for new services
         // review we could either make this a call to StakingLayer or also send it in onUnstake, to get rid of this if clause
-        if(slashPercentages[service] == 0) {
+        if (slashPercentages[service] == 0) {
             slashPercentages[service] = maximumSlashingPercentage;
         }
 
