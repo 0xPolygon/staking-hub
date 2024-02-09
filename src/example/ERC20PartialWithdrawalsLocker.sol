@@ -10,16 +10,14 @@ import {Locker} from "../template/Locker.sol";
 abstract contract ERC20PartialWithdrawalsLocker is Locker {
     // TODO add tracking onSlash?
 
-    mapping(address => uint256) slashableAmount;
-    mapping(uint256 service => uint8) slashPercentages;
-    mapping(uint256 => Service) services;
+    mapping(address staker => mapping(uint256 => Service)) services;
     uint256 highestStakeService;
 
     struct Service {
         uint256 index;
         uint256 left;
         uint256 right;
-        uint256 amount;
+        uint256 amount; // yes, this tracks same amount as balancesIn, but more convenient to also have it here.
     }
 
     constructor(address _stakingHub) Locker(_stakingHub) {}
@@ -36,7 +34,7 @@ abstract contract ERC20PartialWithdrawalsLocker is Locker {
     /// @dev returns amount of veTKN that can be withdrawn
     function _withdrawableAmount() internal view returns (uint256 amount) {
         uint256 slashable = slashableAmount[msg.sender];
-        uint256 highestStake = services[highestStakeService].amount;
+        uint256 highestStake = services[msg.sender][highestStakeService].amount;
 
         // use highest
         return balanceOf(msg.sender) - highestStake >= slashable ? highestStake : slashable;
@@ -47,29 +45,12 @@ abstract contract ERC20PartialWithdrawalsLocker is Locker {
     function _onRestake(
         address staker,
         uint256 service,
-        uint256 lockingInUntil, // review not required here, keep it?
         uint256 stakingAmount,
-        uint8 maximumSlashingPercentage
+        uint8 maxSlashingPercentage
     ) internal override {
-        uint256 totalStakedAmount = services[service].amount;
+        uint256 totalStakedAmount = services[staker][service].amount;
 
-        if (slashPercentages[service] == 0) {
-            slashPercentages[service] = maximumSlashingPercentage;
-            slashableAmount[staker] += ((stakingAmount / balanceOf(staker)) * maximumSlashingPercentage) / 100;
-        } else if (slashPercentages[service] == maximumSlashingPercentage) {
-            slashableAmount[staker] += ((stakingAmount / balanceOf(staker)) * maximumSlashingPercentage) / 100;
-        } else {
-            // new maximumSlashingPercentage
-            // update slashablePercentage using the new maximumSlashingPercentage
-            uint256 oldSlash = ((totalStakedAmount - stakingAmount) * slashPercentages[service]) / 100;
-            uint256 newSlash = ((totalStakedAmount) * maximumSlashingPercentage) / 100;
-            slashableAmount[staker] -= oldSlash;
-            slashableAmount[staker] += newSlash;
-        }
-
-        updateHighestStake(service, totalStakedAmount);
-
-        require(slashableAmount[staker] <= balanceOf(staker), "ERC20PartialWithdrawalsLocker: Slashable amount too high.");
+        updateHighestStake(staker, service, totalStakedAmount);
     }
 
     /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
@@ -78,15 +59,11 @@ abstract contract ERC20PartialWithdrawalsLocker is Locker {
         // review only allow unstaking the same amount that you staked before.
         // we can avoid loops in the onUnstake hook this way!
 
-        uint256 slashChange = services[service].amount * slashPercentages[service] / 10_000;
-
-        slashableAmount[staker] -= slashChange;
-
         // delete service entry
-        Service memory serviceEntry = services[service];
-        services[serviceEntry.left].right = serviceEntry.right;
-        services[serviceEntry.right].left = serviceEntry.left;
-        delete services[service];
+        Service memory serviceEntry = services[staker][service];
+        services[staker][serviceEntry.left].right = serviceEntry.right;
+        services[staker][serviceEntry.right].left = serviceEntry.left;
+        delete services[staker][service];
 
         // update highestStakeService if necessary
         if (service == highestStakeService) {
@@ -94,22 +71,22 @@ abstract contract ERC20PartialWithdrawalsLocker is Locker {
         }
     }
 
-    function updateHighestStake(uint256 service, uint256 totalStakedAmount) private {
+    function updateHighestStake(address staker, uint256 service, uint256 totalStakedAmount) private {
         // new high, if first entry, second line won't have any effect
-        if (services[highestStakeService].amount <= totalStakedAmount) {
-            services[service] = Service({index: service, left: highestStakeService, right: 0, amount: totalStakedAmount});
-            services[highestStakeService].right = service;
+        if (services[staker][highestStakeService].amount <= totalStakedAmount) {
+            services[staker][service] = Service({index: service, left: highestStakeService, right: 0, amount: totalStakedAmount});
+            services[staker][highestStakeService].right = service;
             highestStakeService = service;
         } else {
             // sort it in
-            uint256 currentServiceIndex = services[highestStakeService].left;
+            uint256 currentServiceIndex = services[staker][highestStakeService].left;
             while (true) {
-                Service memory currentService = services[currentServiceIndex];
+                Service memory currentService = services[staker][currentServiceIndex];
 
                 // found lower entry
                 if (currentService.amount < totalStakedAmount) {
-                    Service memory higherService = services[currentService.right];
-                    services[service] = Service({index: service, left: currentService.index, right: higherService.index, amount: totalStakedAmount});
+                    Service memory higherService = services[staker][currentService.right];
+                    services[staker][service] = Service({index: service, left: currentService.index, right: higherService.index, amount: totalStakedAmount});
                     higherService.left = service;
                     currentService.right = service;
                     break;
@@ -117,7 +94,7 @@ abstract contract ERC20PartialWithdrawalsLocker is Locker {
 
                 // found bottom
                 if (currentService.amount > totalStakedAmount && currentService.left == 0) {
-                    services[service] = Service({index: service, left: 0, right: currentService.index, amount: totalStakedAmount});
+                    services[staker][service] = Service({index: service, left: 0, right: currentService.index, amount: totalStakedAmount});
                     currentService.left = service;
                     break;
                 }
