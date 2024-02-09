@@ -1,23 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-// TODO Is it outdated?
 /// @title Locker
 /// @author Polygon Labs
-/// @notice A Locker holds and manages Stakers' funds.
-/// @notice A Staker deposits funds into the Locker before subscribing to a Services that uses the Locker.
+/// @notice A locker holds and manages stakers' funds.
+/// @notice A staker deposits funds into the locker before subscribing to services that uses that locker.
 interface ILocker {
-    // ========== TRIGGERS ==========
-
-    /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Locker.
-    /// @dev Triggered before `onRestake` on the Service.
+    /// @dev Triggered by the Staking Layer when a staker is subscribing to a service that uses the locker.
+    /// @dev Triggered before `onSubscribe` on the service.
     function onSubscribe(address staker, uint256 service, uint8 maxSlashingPercentage) external;
 
-    /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
-    /// @dev Triggered after `onUnstake` on the Service.
-    function onUnsubscribe(address staker, uint256 service, uint8 maxSlashingPercentage) external;
-
-    // ========== QUERIES ==========
+    /// @dev Called by the Staking Layer when a staker has unsubscribed from a service that uses the locker.
+    /// @dev Triggered after `onSubscribe` on the service.
+    function onUnsubscribe(address staker, uint256 service) external;
 
     /// @return amount underlying balance of deposited stake
     function balanceOf(address staker) external view returns (uint256 amount);

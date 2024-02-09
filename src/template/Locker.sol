@@ -4,97 +4,88 @@ pragma solidity 0.8.24;
 import {ILocker} from "../interface/ILocker.sol";
 import {StakingLayer} from "../StakingLayer.sol";
 
-/// @title Locker
-/// @author Polygon Labs
-/// @notice A Locker holds and manages Stakers' funds.
-/// @notice A Staker deposits funds into the Locker before subscribing to a Services that uses the Locker.
 abstract contract Locker is ILocker {
     address internal immutable _stakingLayer;
+    address internal immutable _burnAddress;
 
-    mapping(uint256 => uint256) public totalSupplies;
-    mapping(address staker => mapping(uint256 service => uint256 balance)) public balancesIn;
+    uint256 internal _id;
+    mapping(address staker => uint256 balance) internal _balance;
+    mapping(address staker => uint256 votingPower) internal _votingPower;
+    uint256 internal _totalSupply;
+    uint256 internal _totalVotingPower;
 
-    mapping(address => uint256) slashableAmount;
-    mapping(uint256 service => uint8) slashPercentages;
+    modifier burner() {
+        uint256 slashedPercentage = StakingLayer(_stakingLayer).slashedPercentage(_id, msg.sender);
+        if (slashedPercentage > 0) _burn(slashedPercentage);
+        _;
+    }
 
-    // events
-    event Restaked(address staker, uint256 service, uint256 amountOrId, uint8 maximumSlashingPercentage);
-    event Unstaked(address staker, uint256 service, uint256 amountOrId);
-    event Slashed(address staker, uint256 service, uint256 amountOrId);
-
-    constructor(address stakingLayer) {
+    constructor(address stakingLayer, address burnAddress) {
         _stakingLayer = stakingLayer;
-
-        // register
-        StakingLayer(_stakingLayer).registerLocker();
+        _burnAddress = burnAddress;
     }
 
-    // FUNCTIONS TO IMPLEMENT
-    function balanceOf(address staker) public view virtual returns (uint256);
-    function _onSlash(address user, uint256 service, uint256 amountOrId) internal virtual;
-    function _onRestake(address staker, uint256 service, uint256 amountOrId, uint8 maximumSlashingPercentage) internal virtual;
-    function _onUnstake(address staker, uint256 service, uint256 amountOrId) internal virtual;
-
-    /// @dev Triggered by the Hub when a staker gets slashed on penalized
-    function onSlash(address user, uint256 service, uint256 amountOrId) external {
-        require(msg.sender == _stakingLayer, "Only StakingHub can call this function.");
-
-        totalSupplies[service] -= amountOrId;
-
-        _onSlash(user, service, amountOrId);
-        emit Slashed(user, service, amountOrId);
+    function registerLocker() external {
+        _id = StakingLayer(_stakingLayer).registerLocker();
     }
 
-    /// @dev Triggered by the Hub when a Staker restakes to a Services that uses the Locker.
-    /// @dev Triggered before `onRestake` on the Service.
-    function onSubscribe(address staker, uint256 service, uint256 amountOrId, uint8 maxSlashingPercentage) external returns (uint256 newStake) {
-        require(msg.sender == _stakingLayer, "Only Staking Layer can call this function.");
-        enforceRestakingLimit(staker, service, amountOrId, maxSlashingPercentage);
-
-        totalSupplies[service] += amountOrId;
-
-        balancesIn[staker][service] += amountOrId;
-
-        _onRestake(staker, service, amountOrId, maxSlashingPercentage);
-        emit Restaked(staker, service, amountOrId, maxSlashingPercentage);
-
-        return balancesIn[staker][service];
+    function deposit(uint256 amount) external burner {
+        (uint256 balanceIncrease, uint256 votingPowerIncrease) = _deposit(amount);
+        _balance[msg.sender] += balanceIncrease;
+        _totalSupply += balanceIncrease;
+        _votingPower[msg.sender] += votingPowerIncrease;
+        _totalVotingPower += votingPowerIncrease;
     }
 
-    /// @dev Called by the Hub when a Staker has unstaked from a Service that uses the Locker.
-    /// @dev Triggered after `onUnstake` on the Service.
-    function onUnsubscribe(address staker, uint256 service, uint256 amountOrId) external returns (uint256 remainingStake) {
-        require(msg.sender == _stakingLayer, "Only Staking Layer can call this function.");
-
-        balancesIn[staker][service] -= amountOrId;
-
-        totalSupplies[service] -= amountOrId;
-
-        uint256 slashChange = (amountOrId * slashPercentages[service]) / 100;
-        slashableAmount[staker] -= slashChange;
-
-        _onUnstake(staker, service, amountOrId);
-        emit Unstaked(staker, service, amountOrId);
-
-        return balancesIn[staker][service];
+    // NOTE Are we limiting subscriptions if risk above 100%?
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external burner {
+        require(msg.sender == _stakingLayer, "Unauthorized");
+        _trackSubscription(staker, service, maxSlashPercentage);
+        _onSubscribe(staker, service, maxSlashPercentage);
     }
 
-    function balanceOfIn(address staker, uint256 service) public view returns (uint256 balanceInService) {
-        // TODO substract slashed amount (found in StakingLayer)
-        return balancesIn[staker][service];
+    function onUnsubscribe(address staker, uint256 service) external burner {
+        require(msg.sender == _stakingLayer, "Unauthorized");
+        _untrackSubscription(staker, service);
+        _onUnsubscribe(staker, service);
     }
 
-    function enforceRestakingLimit(address staker, uint256 service, uint256 amount, uint8 maximumSlashingPercentage) private {
-        // remember slash % for new services
-        // review we could either make this a call to StakingLayer or also send it in onUnstake, to get rid of this if clause
-        if (slashPercentages[service] == 0) {
-            slashPercentages[service] = maximumSlashingPercentage;
-        }
-
-        slashableAmount[staker] += (amount * maximumSlashingPercentage) / 100;
-
-        require(slashableAmount[staker] <= balanceOf(staker), "ERC20PartialWithdrawalsStrategy: Slashable amount too high.");
+    // TODO Add delay
+    function withdraw(uint256 amount) external burner {
+        require(amount <= _safeBalanceOf(msg.sender), "Amount exceeds safe balance");
+        (uint256 balanceDecrease, uint256 votingPowerDecrease) = _withdraw(amount);
+        _balance[msg.sender] += balanceDecrease;
+        _totalSupply += balanceDecrease;
+        _votingPower[msg.sender] += votingPowerDecrease;
+        _totalVotingPower += votingPowerDecrease;
     }
 
-    function totalSupply() public view virtual returns (uint256) {}
+    function balanceOf(address staker) external view returns (uint256 balance) {
+        return _balanceOf(staker, StakingLayer(_stakingLayer).slashedPercentage(_id, staker));
+    }
+
+    function votingPowerOf(address staker) external view returns (uint256 votingPower) {
+        return _votingPower[staker];
+    }
+
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
+    }
+
+    function totalVotingPower() external view returns (uint256) {
+        return _totalVotingPower;
+    }
+
+    function _deposit(uint256 amount) internal virtual returns (uint256 balanceIncrease, uint256 votingPowerIncrease);
+    function _trackSubscription(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual;
+    function _onSubscribe(address staker, uint256 service, uint256 maxSlashPercentage) internal virtual;
+    function _untrackSubscription(address staker, uint256 service) internal virtual;
+    function _onUnsubscribe(address staker, uint256 service) internal virtual;
+    function _safeBalanceOf(address staker) internal virtual returns (uint256 safeBalance);
+    function _withdraw(uint256 amount) internal virtual returns (uint256 balanceDecrease, uint256 votingPowerDecrease);
+    function _balanceOf(address staker, uint256 slashedPercentage) internal view virtual returns (uint256 balance);
+
+    function _burn(uint256 percenage) private {
+        // TODO
+    }
 }

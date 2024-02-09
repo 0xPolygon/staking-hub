@@ -53,11 +53,11 @@ contract StakingLayer is SlashingManager {
             }
         }
         uint256[] memory lockers = _lockers(service);
-        uint256 slashingPercentages = _slashingPercentages(service);
         uint256 len = lockers.length;
         // Note: A service needs to trust the lockers not to revert on the call
+        // TODO Why are we letting lockers revert?
         for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onUnsubscribe(msg.sender, service, slashingPercentages.get(i));
+            locker(lockers[i]).onUnsubscribe(msg.sender, service);
         }
     }
 
@@ -83,7 +83,7 @@ contract StakingLayer is SlashingManager {
         return _laggingSlashedPercentage(lockerId_, staker);
     }
 
-    function confirmBurning(address staker) external {
-        _confirmBurning(lockerId(msg.sender), staker);
+    function onBurn(address staker) external {
+        _onBurn(lockerId(msg.sender), staker);
     }
 }

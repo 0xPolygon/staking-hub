@@ -175,17 +175,20 @@ abstract contract SlashingManager is ServiceManager {
         }
     }
 
+    ///@dev You will almost always need the lagging percentage, not the coincident one. Only use if you know what you're doing.
     function _coincidentSlashedPercentage(uint256 lockerId_, address staker) internal view returns (uint8 percentage) {
         LockerSlashes memory slashes = _slashers.data[staker].totalSlashed[lockerId_];
         percentage = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
     }
 
-    function _confirmBurning(uint256 lockerId_, address staker) internal {
-        require(_isFrozen(staker), "Staker is frozen");
-        LockerSlashes storage slashes = _slashers.data[staker].totalSlashed[lockerId_];
-        slashes.previouslySlashed = 0;
-        slashes.percentage = 0;
-        emit SlashedStakeBurned(lockerId_, staker);
+    function _onBurn(uint256 lockerId_, address staker) internal {
+        require(!_isFrozen(staker), "Staker is frozen");
+        if (_laggingSlashedPercentage(lockerId_, staker) != 0) {
+            LockerSlashes storage slashes = _slashers.data[staker].totalSlashed[lockerId_];
+            slashes.previouslySlashed = 0;
+            slashes.percentage = 0;
+            emit SlashedStakeBurned(lockerId_, staker);
+        }
     }
 
     function _isFrozen(address staker) internal view returns (bool) {
