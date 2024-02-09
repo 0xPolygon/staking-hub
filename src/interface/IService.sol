@@ -9,12 +9,6 @@ pragma solidity 0.8.24;
 interface IService {
     // ========== TRIGGERS ==========
 
-    /// @notice Lets a Staker restake in the Service.
-    /// @notice Performs all neccessary checks on the Staker (e.g., voting power, whitelist, BLS-key, etc.).
-    /// @dev Called by the Hub when a Staker subscribes to the Service.
-    /// @dev The Service can revert.
-    function onSubscribe(address staker) external;
-
     /// @notice Lets a Staker unstake from the Service.
     /// @notice Performs all neccessary checks on the Staker.
     /// @notice A Service that requires unstaking notice may still choose allow the Staker to finalize the unstaking immediately.
