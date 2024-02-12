@@ -24,11 +24,11 @@ abstract contract Locker is ILocker {
 
     uint256 internal _id;
 
-    modifier burner() {
-        uint256 slashedPercentage = StakingLayer(_stakingLayer).slashedPercentage(_id, msg.sender);
+    modifier burner(address staker) {
+        uint256 slashedPercentage = StakingLayer(_stakingLayer).slashedPercentage(_id, staker);
         if (slashedPercentage > 0) {
-            _burn(slashedPercentage);
-            StakingLayer(_stakingLayer).onBurn(msg.sender);
+            _burn(staker, slashedPercentage);
+            StakingLayer(_stakingLayer).onBurn(staker);
         }
         _;
     }
@@ -42,7 +42,7 @@ abstract contract Locker is ILocker {
         _id = StakingLayer(_stakingLayer).registerLocker();
     }
 
-    function deposit(uint256 amount) external burner {
+    function deposit(uint256 amount) external burner(msg.sender) {
         (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower) = _deposit(amount);
         _staker[msg.sender].balance = newBalance;
         _totalSupply = newTotalSupply;
@@ -50,14 +50,14 @@ abstract contract Locker is ILocker {
         _totalVotingPower = newTotalVotingPower;
     }
 
-    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint8 recommendedRisk) external burner {
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint8 recommendedRisk) external burner(staker) {
         require(msg.sender == _stakingLayer, "Unauthorized");
         _staker[staker].risk += maxSlashPercentage;
         require(_staker[staker].risk < recommendedRisk, "Risk exceeds recommended risk");
         _onSubscribe(staker, service, maxSlashPercentage, recommendedRisk);
     }
 
-    function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external burner {
+    function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external burner(staker) {
         require(msg.sender == _stakingLayer, "Unauthorized");
         _staker[staker].risk -= maxSlashPercentage;
         _onUnsubscribe(staker, service, maxSlashPercentage);
@@ -67,7 +67,7 @@ abstract contract Locker is ILocker {
         initiateWithdrawal(amount, false);
     }
 
-    function initiateWithdrawal(uint256 amount, bool force) public burner {
+    function initiateWithdrawal(uint256 amount, bool force) public burner(msg.sender) {
         if (!force) require(_staker[msg.sender].initialWithdrawAmount == 0, "Withdrawal already initiated");
         require(amount != 0, "Invalid amount");
         require(!_isAmountGt(amount, _safeBalanceOf(msg.sender)), "Amount exceeds safe balance");
@@ -75,7 +75,7 @@ abstract contract Locker is ILocker {
         _staker[msg.sender].withdrawableFrom = block.timestamp + STAKER_WITHDRAWAL_DELAY;
     }
 
-    function finalizeWithdrawal() external burner returns (uint256 amount) {
+    function finalizeWithdrawal() external burner(msg.sender) returns (uint256 amount) {
         amount = _staker[msg.sender].initialWithdrawAmount;
         require(amount != 0, "Withrawal not initiated");
         require(_staker[msg.sender].withdrawableFrom > block.timestamp, "Cannot withdraw at this time");
@@ -113,7 +113,7 @@ abstract contract Locker is ILocker {
         return _staker[staker].risk;
     }
 
-    function _burn(uint256 percentage) internal virtual;
+    function _burn(address staker, uint256 percentage) internal virtual;
     function _deposit(uint256 amount)
         internal
         virtual
