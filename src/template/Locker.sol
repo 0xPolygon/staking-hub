@@ -5,12 +5,6 @@ import {ILocker} from "../interface/ILocker.sol";
 import {StakingLayer} from "../StakingLayer.sol";
 
 abstract contract Locker is ILocker {
-    enum Relation {
-        LT,
-        EQ,
-        GT
-    }
-
     struct StakerData {
         uint256 balance;
         uint256 votingPower;
@@ -73,7 +67,7 @@ abstract contract Locker is ILocker {
     function initiateWithdrawal(uint256 amount, bool force) public burner {
         if (!force) require(_staker[msg.sender].initialWithdrawAmount == 0, "Withdrawal already initiated");
         require(amount != 0, "Invalid amount");
-        require(_compareAmount(amount, _safeBalanceOf(msg.sender)) != Relation.GT, "Amount exceeds safe balance");
+        require(!_isAmountGt(amount, _safeBalanceOf(msg.sender)), "Amount exceeds safe balance");
         _staker[msg.sender].withdrawableFrom = block.timestamp + STAKER_WITHDRAWAL_DELAY;
         _staker[msg.sender].initialWithdrawAmount = amount;
     }
@@ -82,7 +76,7 @@ abstract contract Locker is ILocker {
         amount = _staker[msg.sender].initialWithdrawAmount;
         require(amount != 0, "Withrawal not initiated");
         require(_staker[msg.sender].withdrawableFrom > block.timestamp, "Cannot withdraw at this time");
-        if (_compareAmount(amount, _safeBalanceOf(msg.sender)) == Relation.GT) amount = _safeBalanceOf(msg.sender);
+        if (_isAmountGt(amount, _safeBalanceOf(msg.sender))) amount = _safeBalanceOf(msg.sender);
         require(amount != 0, "Nothing to withdraw");
         delete _staker[msg.sender].initialWithdrawAmount;
         (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower) = _withdraw(amount);
@@ -119,7 +113,7 @@ abstract contract Locker is ILocker {
         returns (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower);
     function _onSubscribe(address staker, uint256 service, uint256 maxSlashPercentage, uint8 recommendedRisk) internal virtual;
     function _onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual;
-    function _compareAmount(uint256 a, uint256 b) internal virtual returns (Relation);
+    function _isAmountGt(uint256 a, uint256 b) internal virtual returns (bool isGreaterThan);
     function _withdraw(uint256 amount)
         internal
         virtual
