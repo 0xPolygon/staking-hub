@@ -15,7 +15,7 @@ abstract contract Locker is ILocker {
         uint256 balance;
         uint256 votingPower;
         uint8 risk;
-        uint256 initialWithdrawalAmount;
+        uint256 initialWithdrawAmount;
         uint256 withdrawableFrom;
     }
 
@@ -71,19 +71,20 @@ abstract contract Locker is ILocker {
     }
 
     function initiateWithdrawal(uint256 amount, bool force) public burner {
-        if (!force) require(_staker[msg.sender].initialWithdrawalAmount == 0, "Withrawal already initiated");
+        if (!force) require(_staker[msg.sender].initialWithdrawAmount == 0, "Withrawal already initiated");
         require(amount != 0, "Invalid amount");
         require(_compareAmount(amount, _safeBalanceOf(msg.sender)) != Relation.GT, "Amount exceeds safe balance");
         _staker[msg.sender].withdrawableFrom = block.timestamp + STAKER_WITHDRAWAL_DELAY;
-        _staker[msg.sender].initialWithdrawalAmount = amount;
+        _staker[msg.sender].initialWithdrawAmount = amount;
     }
 
     function finalizeWithdrawal() external burner returns (uint256 amount) {
-        amount = _staker[msg.sender].initialWithdrawalAmount;
+        amount = _staker[msg.sender].initialWithdrawAmount;
         require(amount != 0, "Withrawal not initiated");
         require(_staker[msg.sender].withdrawableFrom > block.timestamp, "Cannot withdraw at this time");
         if (_compareAmount(amount, _safeBalanceOf(msg.sender)) == Relation.GT) amount = _safeBalanceOf(msg.sender);
         require(amount != 0, "Nothing to withdraw");
+        delete _staker[msg.sender].initialWithdrawAmount;
         (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower) = _withdraw(amount);
         _staker[msg.sender].balance = newBalance;
         _totalSupply = newTotalSupply;
