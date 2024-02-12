@@ -66,7 +66,7 @@ abstract contract Locker is ILocker {
         _onUnsubscribe(staker, service, maxSlashPercentage);
     }
 
-    function initiateWithdrawal(uint256 amount) external burner {
+    function initiateWithdrawal(uint256 amount) external {
         initiateWithdrawal(amount, false);
     }
 
