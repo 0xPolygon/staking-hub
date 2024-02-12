@@ -34,7 +34,7 @@ abstract contract SlashingManager is ServiceManager {
     using PackedUints for uint256;
 
     uint256 internal constant SLASHER_UPDATE_TIMELOCK = 7 days;
-    uint8 internal constant LOCKER_RISK_RECOMMENDATION = 100;
+    uint8 internal constant LOCKER_RISK_MAXIMUM = 100;
     uint256 internal constant STAKER_FREEZE_PERIOD = 7 days;
 
     struct SlashingStorage {

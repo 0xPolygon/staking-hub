@@ -50,11 +50,11 @@ abstract contract Locker is ILocker {
         _totalVotingPower = newTotalVotingPower;
     }
 
-    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint8 recommendedRisk) external burner(staker) {
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint8 maxRisk) external burner(staker) {
         require(msg.sender == _stakingLayer, "Unauthorized");
         _staker[staker].risk += maxSlashPercentage;
-        require(_staker[staker].risk < recommendedRisk, "Risk exceeds recommended risk");
-        _onSubscribe(staker, service, maxSlashPercentage, recommendedRisk);
+        require(_staker[staker].risk < maxRisk, "Risk exceeds max risk");
+        _onSubscribe(staker, service, maxSlashPercentage, maxRisk);
     }
 
     function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external burner(staker) {
@@ -118,7 +118,7 @@ abstract contract Locker is ILocker {
         internal
         virtual
         returns (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower);
-    function _onSubscribe(address staker, uint256 service, uint256 maxSlashPercentage, uint8 recommendedRisk) internal virtual;
+    function _onSubscribe(address staker, uint256 service, uint256 maxSlashPercentage, uint8 maxRisk) internal virtual;
     function _onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual;
     function _isAmountGt(uint256 a, uint256 b) internal virtual returns (bool isGreaterThan);
     function _withdraw(uint256 amount)
