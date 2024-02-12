@@ -3,10 +3,9 @@ pragma solidity 0.8.24;
 
 import {LockerManager} from "./LockerManager.sol";
 
-// NOTE Unused
-struct Staker {
+/*struct Staker {
     uint216 subscriptionCount;
-}
+}*/
 
 struct Subscription {
     bool subscribed;
@@ -17,7 +16,7 @@ struct Subscription {
 
 abstract contract StakerManager is LockerManager {
     struct StakerStorage {
-        mapping(address staker => Staker) data;
+        //mapping(address staker => Staker) data;
         mapping(address staker => mapping(uint256 service => Subscription)) subscriptions;
     }
 
@@ -28,7 +27,7 @@ abstract contract StakerManager is LockerManager {
         require(!sub.subscribed, "Already subscribed");
         require(lockedInUntil > block.timestamp, "Invalid subscription term");
         _stakers.subscriptions[staker][service] = Subscription(true, lockedInUntil, 0, 0);
-        ++_stakers.data[staker].subscriptionCount;
+        //++_stakers.data[staker].subscriptionCount;
         emit Subscribed(staker, service, lockedInUntil);
     }
 
@@ -40,14 +39,16 @@ abstract contract StakerManager is LockerManager {
         emit SubscriptionCanceled(staker, service);
     }
 
-    function _unsubscribe(address staker, uint256 service) internal {
+    function _unsubscribe(address staker, uint256 service, bool force) internal {
         Subscription storage sub = _stakers.subscriptions[staker][service];
         require(sub.subscribed, "Not subscribed");
-        require(sub.unsubscribableFrom != 0, "Subscription not canceled");
-        require(block.timestamp > sub.unsubscribableFrom, "Cancelation hasn't taken effect");
+        if (!force) {
+            require(sub.unsubscribableFrom != 0, "Subscription not canceled");
+            require(block.timestamp > sub.unsubscribableFrom, "Cancelation hasn't taken effect");
+        }
         sub.subscribed = false;
         sub.unsubscribableFrom = 0;
-        --_stakers.data[staker].subscriptionCount;
+        //--_stakers.data[staker].subscriptionCount;
         emit Unsubscribed(staker, service);
     }
 

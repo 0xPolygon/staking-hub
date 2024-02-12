@@ -43,7 +43,7 @@ contract StakingLayer is SlashingManager {
     }
 
     function unsubscribe(uint256 service) external notFrozen {
-        _unsubscribe(msg.sender, service);
+        _unsubscribe(msg.sender, service, false);
         if (_isLockedIn(msg.sender, service)) {
             _service(service).onUnsubscribe(msg.sender);
         } else {
@@ -55,13 +55,22 @@ contract StakingLayer is SlashingManager {
         uint256[] memory lockers = _lockers(service);
         uint256 len = lockers.length;
         // Note: A service needs to trust the lockers not to revert on the call
-        // TODO Why are we letting lockers revert?
         for (uint256 i; i < len; ++i) {
             locker(lockers[i]).onUnsubscribe(msg.sender, service);
         }
     }
 
-    // TODO unsubscribe(address staker): called by service; only if staker not frozen!
+    function unsubscribe(address staker) external {
+        require(!_isFrozen(staker), "Staker is frozen");
+        uint256 service = _serviceId(msg.sender);
+        _unsubscribe(staker, service, true);
+        uint256[] memory lockers = _lockers(service);
+        uint256 len = lockers.length;
+        // Note: A service needs to trust the lockers not to revert on the call
+        for (uint256 i; i < len; ++i) {
+            locker(lockers[i]).onUnsubscribe(msg.sender, service);
+        }
+    }
 
     function initiateSlasherUpdate(address newSlasher) external returns (uint40 scheduledTime) {
         scheduledTime = _initiateSlasherUpdate(_serviceId(msg.sender), newSlasher);
