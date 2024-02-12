@@ -26,7 +26,10 @@ abstract contract Locker is ILocker {
 
     modifier burner() {
         uint256 slashedPercentage = StakingLayer(_stakingLayer).slashedPercentage(_id, msg.sender);
-        if (slashedPercentage > 0) _burn(slashedPercentage);
+        if (slashedPercentage > 0) {
+            _burn(slashedPercentage);
+            StakingLayer(_stakingLayer).onBurn(msg.sender);
+        }
         _;
     }
 
@@ -68,8 +71,8 @@ abstract contract Locker is ILocker {
         if (!force) require(_staker[msg.sender].initialWithdrawAmount == 0, "Withdrawal already initiated");
         require(amount != 0, "Invalid amount");
         require(!_isAmountGt(amount, _safeBalanceOf(msg.sender)), "Amount exceeds safe balance");
-        _staker[msg.sender].withdrawableFrom = block.timestamp + STAKER_WITHDRAWAL_DELAY;
         _staker[msg.sender].initialWithdrawAmount = amount;
+        _staker[msg.sender].withdrawableFrom = block.timestamp + STAKER_WITHDRAWAL_DELAY;
     }
 
     function finalizeWithdrawal() external burner returns (uint256 amount) {
@@ -87,7 +90,7 @@ abstract contract Locker is ILocker {
     }
 
     function balanceOf(address staker) public view returns (uint256 balance) {
-        return _balanceOf(staker, _staker[staker].balance, StakingLayer(_stakingLayer).slashedPercentage(_id, staker));
+        return _balanceOf(staker, StakingLayer(_stakingLayer).slashedPercentage(_id, staker));
     }
 
     function votingPowerOf(address staker) public view returns (uint256 votingPower) {
@@ -102,11 +105,15 @@ abstract contract Locker is ILocker {
         return _totalVotingPower;
     }
 
-    function _getRisk(address staker) internal view returns (uint8) {
+    function _balance(address staker) internal view returns (uint256) {
+        return _staker[staker].balance;
+    }
+
+    function _risk(address staker) internal view returns (uint8) {
         return _staker[staker].risk;
     }
 
-    function _burn(uint256 percenage) internal virtual;
+    function _burn(uint256 percentage) internal virtual;
     function _deposit(uint256 amount)
         internal
         virtual
@@ -118,6 +125,6 @@ abstract contract Locker is ILocker {
         internal
         virtual
         returns (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower);
-    function _balanceOf(address staker, uint256 currentBalance, uint256 slashedPercentage) internal view virtual returns (uint256 balance);
+    function _balanceOf(address staker, uint256 slashedPercentage) internal view virtual returns (uint256 balance);
     function _safeBalanceOf(address staker) internal view virtual returns (uint256 safeBalance);
 }
