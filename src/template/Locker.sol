@@ -105,12 +105,8 @@ abstract contract Locker is ILocker {
         return _totalVotingPower;
     }
 
-    function _balance(address staker) internal view returns (uint256) {
-        return _staker[staker].balance;
-    }
-
-    function _risk(address staker) internal view returns (uint8) {
-        return _staker[staker].risk;
+    function _getStaker(address staker) internal view returns (StakerData memory staker_) {
+        return _staker[staker];
     }
 
     function _burn(address staker, uint256 percentage) internal virtual;
