@@ -7,7 +7,7 @@ pragma solidity 0.8.24;
 /// @notice A staker deposits funds into the locker before subscribing to services that uses that locker.
 interface ILocker {
     /// @dev Triggered by the Staking Layer when a staker is subscribing to a service that uses the locker.
-    function onSubscribe(address staker, uint256 service, uint8 maxSlashingPercentage) external;
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint8 riskRecommendation) external;
 
     /// @dev Called by the Staking Layer when a staker has unsubscribed from a service that uses the locker.
     function onUnsubscribe(address staker, uint256 service) external;
