@@ -92,6 +92,10 @@ contract StakingLayer is SlashingManager {
         return _laggingSlashedPercentage(lockerId_, staker);
     }
 
+    function totalSlashedPercentage(uint256 lockerId_) external view returns (uint8 percentage) {
+        // TODO
+    }
+
     function onBurn(address staker) external {
         _onBurn(lockerId(msg.sender), staker);
     }

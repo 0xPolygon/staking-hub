@@ -6,8 +6,7 @@ import {StakingLayer} from "../StakingLayer.sol";
 
 abstract contract Locker is ILocker {
     struct StakerData {
-        uint256 balance;
-        uint256 votingPower;
+        uint256 rawBalance;
         uint8 risk;
         uint256 initialWithdrawAmount;
         uint256 withdrawableFrom;
@@ -19,8 +18,7 @@ abstract contract Locker is ILocker {
     address internal immutable _burnAddress;
 
     mapping(address staker => StakerData) private _staker;
-    uint256 private _totalSupply;
-    uint256 private _totalVotingPower;
+    uint256 private _rawTotalSupply;
 
     uint256 internal _id;
 
@@ -43,11 +41,9 @@ abstract contract Locker is ILocker {
     }
 
     function deposit(uint256 amount) external burner(msg.sender) {
-        (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower) = _deposit(amount);
-        _staker[msg.sender].balance = newBalance;
-        _totalSupply = newTotalSupply;
-        _staker[msg.sender].votingPower = newVotingPower;
-        _totalVotingPower = newTotalVotingPower;
+        (uint256 newRawBalance, uint256 newRawTotalSupply) = _deposit(amount);
+        _staker[msg.sender].rawBalance = newRawBalance;
+        _rawTotalSupply = newRawTotalSupply;
     }
 
     function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint8 maxRisk) external burner(staker) {
@@ -70,7 +66,7 @@ abstract contract Locker is ILocker {
     function initiateWithdrawal(uint256 amount, bool force) public burner(msg.sender) {
         if (!force) require(_staker[msg.sender].initialWithdrawAmount == 0, "Withdrawal already initiated");
         require(amount != 0, "Invalid amount");
-        require(!_isAmountGt(amount, _safeBalanceOf(msg.sender)), "Amount exceeds safe balance");
+        require(_amountIsSafe(msg.sender, amount), "Amount exceeds safe balance");
         _staker[msg.sender].initialWithdrawAmount = amount;
         _staker[msg.sender].withdrawableFrom = block.timestamp + STAKER_WITHDRAWAL_DELAY;
     }
@@ -79,48 +75,37 @@ abstract contract Locker is ILocker {
         amount = _staker[msg.sender].initialWithdrawAmount;
         require(amount != 0, "Withrawal not initiated");
         require(_staker[msg.sender].withdrawableFrom > block.timestamp, "Cannot withdraw at this time");
-        if (_isAmountGt(amount, _safeBalanceOf(msg.sender))) amount = _safeBalanceOf(msg.sender);
+        if (!_amountIsSafe(msg.sender, amount)) amount = _safeBalanceOf(msg.sender);
         require(amount != 0, "Nothing to withdraw");
         delete _staker[msg.sender].initialWithdrawAmount;
-        (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower) = _withdraw(amount);
-        _staker[msg.sender].balance = newBalance;
-        _totalSupply = newTotalSupply;
-        _staker[msg.sender].votingPower = newVotingPower;
-        _totalVotingPower = newTotalVotingPower;
+        (uint256 newRawBalance, uint256 newRawTotalSupply) = _withdraw(amount);
+        _staker[msg.sender].rawBalance = newRawBalance;
+        _rawTotalSupply = newRawTotalSupply;
     }
 
     function balanceOf(address staker) public view returns (uint256 balance) {
         return _balanceOf(staker, StakingLayer(_stakingLayer).slashedPercentage(_id, staker));
     }
 
-    function votingPowerOf(address staker) public view returns (uint256 votingPower) {
-        return _staker[staker].votingPower;
-    }
-
     function totalSupply() public view returns (uint256) {
-        return _totalSupply;
-    }
-
-    function totalVotingPower() public view returns (uint256) {
-        return _totalVotingPower;
+        return _totalSupply(StakingLayer(_stakingLayer).totalSlashedPercentage(_id));
     }
 
     function _getStaker(address staker) internal view returns (StakerData memory staker_) {
         return _staker[staker];
     }
 
+    function _getRawTotalSupply() internal view returns (uint256 rawTotalSupply) {
+        return _rawTotalSupply;
+    }
+
     function _burn(address staker, uint256 percentage) internal virtual;
-    function _deposit(uint256 amount)
-        internal
-        virtual
-        returns (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower);
+    function _deposit(uint256 amount) internal virtual returns (uint256 newRawBalance, uint256 newRawTotalSupply);
     function _onSubscribe(address staker, uint256 service, uint256 maxSlashPercentage, uint8 maxRisk) internal virtual;
     function _onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual;
-    function _isAmountGt(uint256 a, uint256 b) internal virtual returns (bool isGreaterThan);
-    function _withdraw(uint256 amount)
-        internal
-        virtual
-        returns (uint256 newBalance, uint256 newTotalSupply, uint256 newVotingPower, uint256 newTotalVotingPower);
-    function _balanceOf(address staker, uint256 slashedPercentage) internal view virtual returns (uint256 balance);
+    function _amountIsSafe(address staker, uint256 a) internal virtual returns (bool isGreaterThan);
     function _safeBalanceOf(address staker) internal view virtual returns (uint256 safeBalance);
+    function _withdraw(uint256 amount) internal virtual returns (uint256 newRawBalance, uint256 newRawTotalSupply);
+    function _balanceOf(address staker, uint256 slashedPercentage) internal view virtual returns (uint256 balance);
+    function _totalSupply(uint256 totalSlashedPercentage) internal view virtual returns (uint256 totalSupply);
 }
