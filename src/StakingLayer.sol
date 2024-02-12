@@ -20,7 +20,7 @@ contract StakingLayer is SlashingManager {
     }
 
     function subscribe(uint256 service, uint40 lockInUntil) external notFrozen {
-        require(service <= _services.counter, "Invalid service");
+        require(service != 0 && service <= _services.counter, "Invalid service");
         _subscribe(msg.sender, service, lockInUntil);
         uint256[] memory lockers = _lockers(service);
         uint256 slashingPercentages = _slashingPercentages(service);
