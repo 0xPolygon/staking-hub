@@ -71,7 +71,7 @@ abstract contract Locker is ILocker {
     }
 
     function initiateWithdrawal(uint256 amount, bool force) public burner {
-        if (!force) require(_staker[msg.sender].initialWithdrawAmount == 0, "Withrawal already initiated");
+        if (!force) require(_staker[msg.sender].initialWithdrawAmount == 0, "Withdrawal already initiated");
         require(amount != 0, "Invalid amount");
         require(_compareAmount(amount, _safeBalanceOf(msg.sender)) != Relation.GT, "Amount exceeds safe balance");
         _staker[msg.sender].withdrawableFrom = block.timestamp + STAKER_WITHDRAWAL_DELAY;
