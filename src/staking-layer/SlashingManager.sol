@@ -10,24 +10,20 @@ struct Slasher {
     uint40 scheduledTime;
 }
 
+// Goal: REAL TIME SLASHING + AGGREGATION
+
+// Slashers are free to implement accumulation & innocence proving if they want to save on gas.
 // Per service (for this freeze period)
 struct ServiceSlashingData {
     bool frozen;
     uint256 slashedPercentages; // how much it slashed in this freeze period; not cleared the nonce just moves on
 }
 
-struct LockerSlashes {
-    uint216 latestNonce;
-    uint8 percentage; // for this locker for this freeze period
-    uint8 previouslySlashed; // for prev periods
-}
-
 // Per staker
 struct Slashing {
-    uint40 freezeEnd;
-    uint216 nonce; // Represents a freeze period
-    mapping(uint256 locker => LockerSlashes) totalSlashed;
-    mapping(uint256 nonce => mapping(uint256 service => ServiceSlashingData)) serviceData;
+    uint256 freezeStart;
+    uint256 freezeEnd;
+    mapping(uint256 freezeStart => mapping(uint256 service => ServiceSlashingData)) serviceData;
 }
 
 abstract contract SlashingManager is ServiceManager {
@@ -78,14 +74,19 @@ abstract contract SlashingManager is ServiceManager {
     function _freeze(address staker, address slasher) internal {
         uint256 service = _slashers.services[slasher];
         require(_isSubscribed(staker, service), "Not subscribed");
-        require(!_isFrozenBy(staker, service), "Already frozen by this service");
-        Slashing storage data = _slashers.data[staker];
-        uint216 nonce = _getNonce(staker);
-        data.nonce = nonce; // the nonce gets updated on freezing
-        uint40 end = uint40(block.timestamp + STAKER_FREEZE_PERIOD);
-        data.freezeEnd = end;
-        _slashers.data[staker].serviceData[nonce][service].frozen = true;
+        require(!_isFrozenBy(staker, service), "Already frozen by this service"); //.frozen == false
+        uint256 end = _updateFreezePeriod(staker, service);
         emit StakerFrozen(staker, service, end);
+    }
+
+    function _updateFreezePeriod(address staker, uint256 byService) internal returns (uint256 end) {
+        Slashing storage data = _slashers.data[staker];
+        if (data.freezeEnd < block.timestamp) {
+            data.freezeStart = block.timestamp;
+        }
+        data.serviceData[block.timestamp][byService].frozen = true;
+        end = block.timestamp + STAKER_FREEZE_PERIOD;
+        data.freezeEnd = end;
     }
 
     function _slash(address staker, address slasher, uint8[] calldata percentages) internal {
@@ -96,8 +97,8 @@ abstract contract SlashingManager is ServiceManager {
         uint256 len = lockers.length;
         require(len == percentages.length, "Invalid number of percentages");
         uint256 maxSlashingPercentages = _services.data[service].slashingPercentages;
-        uint216 nonce = _getNonce(staker);
-        ServiceSlashingData storage serviceData = _slashers.data[staker].serviceData[nonce][service];
+        uint256 freezeStart = _slashers.data[staker].freezeStart;
+        ServiceSlashingData storage serviceData = _slashers.data[staker].serviceData[freezeStart][service];
         uint256 currentSlashingPercentages = serviceData.slashedPercentages; // slashed so far in the freeze period
         for (uint256 i; i < len; ++i) {
             uint8 percentage = percentages[i];
@@ -111,85 +112,10 @@ abstract contract SlashingManager is ServiceManager {
             }
             // The cumulative of all for this period (can not exceed the max)
             currentSlashingPercentages.set(currentPercentage + percentage, i);
-            _updatePerLockerData(locker_, staker, percentage, nonce);
+            locker(locker_).onSlash(staker, service, percentage, freezeStart);
             emit StakerSlashed(staker, service, locker_, percentage);
         }
         serviceData.slashedPercentages = currentSlashingPercentages;
-    }
-
-    // for diff services (PER locker)
-    function _updatePerLockerData(uint256 locker_, address staker, uint8 percentage, uint216 currentNonce) internal {
-        LockerSlashes memory slashes = _slashers.data[staker].totalSlashed[locker_];
-        // new period
-        if (currentNonce > slashes.latestNonce) {
-            slashes.latestNonce = currentNonce;
-            slashes.previouslySlashed = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
-            slashes.percentage = 0;
-        }
-        slashes.percentage += percentage;
-        if (slashes.percentage > 100) slashes.percentage = 100;
-        _slashers.data[staker].totalSlashed[locker_] = slashes;
-    }
-
-    // N    staker nonce
-    // n    per-locker-data-updated-at nonce
-    // c    percentage per locker for current freeze period
-    // t    percentage per locker for previous freeze periods
-
-    // N n   c    t
-    // 0 0   0    0
-    // freeze                   (N up)
-    // 1 0   0    0
-    // slash                    (n up, consolidate t c, add c)
-    // 1 1 665    0
-    // slash                    (add c)
-    // 1 1 666    0
-    // *period ends*
-    // freeze                   (N up)
-    // 2 1 666    0
-    // slash                    (n up, consolidate t c, add c)
-    // 2 2 333  666
-    // slash                    (add c)
-    // 2 2 334  666
-    // *period ends*
-
-    // info:
-    //  not frozen?
-    //      just consolidate t
-    //  frozen? N went up
-    //      check if t consolidated
-    //          n == N
-    //              ret t
-    //          n != N
-    //              consolidate t
-
-    function _laggingSlashedPercentage(uint256 lockerId_, address staker) internal view returns (uint8 percentage) {
-        LockerSlashes memory slashes = _slashers.data[staker].totalSlashed[lockerId_];
-        if (!_isFrozen(staker)) {
-            percentage = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
-        } else {
-            if (slashes.latestNonce == _slashers.data[staker].nonce) {
-                percentage = slashes.previouslySlashed;
-            } else {
-                percentage = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
-            }
-        }
-    }
-
-    ///@dev You will almost always need the lagging percentage, not the coincident one. Only use if you know what you're doing.
-    function _coincidentSlashedPercentage(uint256 lockerId_, address staker) internal view returns (uint8 percentage) {
-        LockerSlashes memory slashes = _slashers.data[staker].totalSlashed[lockerId_];
-        percentage = _combineSlashingPeriods(slashes.previouslySlashed, slashes.percentage);
-    }
-
-    function _onBurn(uint256 lockerId_, address staker) internal {
-        require(!_isFrozen(staker), "Staker is frozen");
-        if (_laggingSlashedPercentage(lockerId_, staker) != 0) {
-            LockerSlashes storage slashes = _slashers.data[staker].totalSlashed[lockerId_];
-            slashes.previouslySlashed = 0;
-            slashes.percentage = 0;
-            emit SlashedStakeBurned(lockerId_, staker);
-        }
     }
 
     function _isFrozen(address staker) internal view returns (bool) {
@@ -197,23 +123,11 @@ abstract contract SlashingManager is ServiceManager {
     }
 
     function _isFrozenBy(address staker, uint256 service) internal view returns (bool) {
-        return _slashers.data[staker].serviceData[_getNonce(staker)][service].frozen;
+        uint256 freezeStart = _slashers.data[staker].freezeStart;
+        return _slashers.data[staker].serviceData[freezeStart][service].frozen;
     }
 
     function _isLockedIn(address staker, uint256 service) internal view override returns (bool) {
         return super._isLockedIn(staker, service) && _slashers.slashers[service].scheduledTime == 0;
-    }
-
-    // WHEN NEW PERIOD STARTS we combine the last period with all the previous periods
-    // essentially applied on top of the amount when the old percentage is taken into account
-    function _combineSlashingPeriods(uint8 oldSlashing, uint8 newSlashing) private pure returns (uint8) {
-        return oldSlashing + ((100 - oldSlashing) * newSlashing) / 100;
-    }
-
-    function _getNonce(address staker) private view returns (uint216 nonce) {
-        nonce = _slashers.data[staker].nonce;
-        if (_slashers.data[staker].freezeEnd < block.timestamp) {
-            nonce += 1;
-        }
     }
 }
