@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity 0.8.24;
 
-import {IStakingLayer} from "../interface/IStakingLayer.sol";
+import {IStakingHub} from "../interface/IStakingHub.sol";
 import {ILocker} from "../interface/ILocker.sol";
 
-abstract contract LockerManager is IStakingLayer {
+abstract contract LockerManager is IStakingHub {
     struct LockerStorage {
         uint256 counter;
         mapping(address => uint256) ids;

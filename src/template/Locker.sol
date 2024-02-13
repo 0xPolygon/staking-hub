@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {ILocker} from "../interface/ILocker.sol";
-import {StakingLayer} from "../StakingLayer.sol";
+import {StakingHub} from "../StakingHub.sol";
 
 abstract contract Locker is ILocker {
     struct StakerData {
@@ -14,7 +14,7 @@ abstract contract Locker is ILocker {
 
     uint256 internal constant STAKER_WITHDRAWAL_DELAY = 7 days;
 
-    address internal immutable _stakingLayer;
+    address internal immutable _stakingHub;
     address internal immutable _burnAddress;
 
     mapping(address staker => StakerData) private _staker;
@@ -23,21 +23,21 @@ abstract contract Locker is ILocker {
     uint256 internal _id;
 
     modifier burner(address staker) {
-        uint256 slashedPercentage = StakingLayer(_stakingLayer).slashedPercentage(_id, staker);
+        uint256 slashedPercentage = StakingHub(_stakingHub).slashedPercentage(_id, staker);
         if (slashedPercentage > 0) {
             _burn(staker, slashedPercentage);
-            StakingLayer(_stakingLayer).onBurn(staker);
+            StakingHub(_stakingHub).onBurn(staker);
         }
         _;
     }
 
-    constructor(address stakingLayer, address burnAddress) {
-        _stakingLayer = stakingLayer;
+    constructor(address stakingHub, address burnAddress) {
+        _stakingHub = stakingHub;
         _burnAddress = burnAddress;
     }
 
     function registerLocker() external {
-        _id = StakingLayer(_stakingLayer).registerLocker();
+        _id = StakingHub(_stakingHub).registerLocker();
     }
 
     function deposit(uint256 amount) external burner(msg.sender) {
@@ -47,14 +47,14 @@ abstract contract Locker is ILocker {
     }
 
     function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint8 maxRisk) external burner(staker) {
-        require(msg.sender == _stakingLayer, "Unauthorized");
+        require(msg.sender == _stakingHub, "Unauthorized");
         _staker[staker].risk += maxSlashPercentage;
         require(_staker[staker].risk < maxRisk, "Risk exceeds max risk");
         _onSubscribe(staker, service, maxSlashPercentage, maxRisk);
     }
 
     function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external burner(staker) {
-        require(msg.sender == _stakingLayer, "Unauthorized");
+        require(msg.sender == _stakingHub, "Unauthorized");
         _staker[staker].risk -= maxSlashPercentage;
         _onUnsubscribe(staker, service, maxSlashPercentage);
     }
@@ -84,11 +84,11 @@ abstract contract Locker is ILocker {
     }
 
     function balanceOf(address staker) public view returns (uint256 balance) {
-        return _balanceOf(staker, StakingLayer(_stakingLayer).slashedPercentage(_id, staker));
+        return _balanceOf(staker, StakingHub(_stakingHub).slashedPercentage(_id, staker));
     }
 
     function totalSupply() public view returns (uint256) {
-        return _totalSupply(StakingLayer(_stakingLayer).totalSlashedPercentage(_id));
+        return _totalSupply(StakingHub(_stakingHub).totalSlashedPercentage(_id));
     }
 
     function _getStaker(address staker) internal view returns (StakerData memory staker_) {

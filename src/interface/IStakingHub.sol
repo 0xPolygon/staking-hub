@@ -6,7 +6,7 @@ struct SlashingInput {
     uint8 percentage;
 }
 
-interface IStakingLayer {
+interface IStakingHub {
     event LockerRegistered(address indexed locker, uint256 indexed lockerId);
     event ServiceRegistered(address indexed service, uint256 indexed serviceId);
     event Subscribed(address indexed staker, uint256 indexed serviceId, uint40 lockInUntil);

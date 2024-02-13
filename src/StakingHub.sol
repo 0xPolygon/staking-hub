@@ -2,10 +2,10 @@
 pragma solidity 0.8.24;
 
 import {SlashingManager} from "./staking-layer/SlashingManager.sol";
-import {SlashingInput} from "./interface/IStakingLayer.sol";
+import {SlashingInput} from "./interface/IStakingHub.sol";
 import {PackedUints} from "./lib/PackedUints.sol";
 
-contract StakingLayer is SlashingManager {
+contract StakingHub is SlashingManager {
     using PackedUints for uint256;
 
     function registerLocker() external returns (uint256 id) {

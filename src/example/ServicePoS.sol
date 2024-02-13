@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {IService} from "../interface/IService.sol";
-import {StakingLayer, SlashingInput} from "../StakingLayer.sol";
+import {StakingHub, SlashingInput} from "../StakingHub.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title ServicePoS
@@ -10,20 +10,20 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /// @notice Represents the Polygon PoS network
 /// @notice Stakers can subscribe to this Service using the Staking-Layer.
 contract ServicePoS is IService, Ownable {
-    StakingLayer immutable stakingLayer;
+    StakingHub immutable stakingHub;
 
     // self-registers as Service, set msg.sender as owner
-    constructor(address _stakingLayer, SlashingInput[] memory _lockers, uint40 unstakingNoticePeriod, address slasher) Ownable(msg.sender) {
-        stakingLayer = StakingLayer(_stakingLayer);
-        stakingLayer.registerService(_lockers, unstakingNoticePeriod, slasher);
+    constructor(address _stakingHub, SlashingInput[] memory _lockers, uint40 unstakingNoticePeriod, address slasher) Ownable(msg.sender) {
+        stakingHub = StakingHub(_stakingHub);
+        stakingHub.registerService(_lockers, unstakingNoticePeriod, slasher);
     }
 
     function initiateSlasherUpdate(address _slasher) public onlyOwner {
-        stakingLayer.initiateSlasherUpdate(_slasher);
+        stakingHub.initiateSlasherUpdate(_slasher);
     }
 
     function finalizeSlasherUpdate() public onlyOwner {
-        stakingLayer.finalizeSlasherUpdate();
+        stakingHub.finalizeSlasherUpdate();
     }
 
     // ========== TRIGGERS ==========

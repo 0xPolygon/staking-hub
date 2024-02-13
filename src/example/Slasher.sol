@@ -3,7 +3,7 @@ pragma solidity 0.8.24;
 
 /*
 import {ISlasher} from "./interface/ISlasher.sol";
-import {SlashingInput, StakingLayer} from "../StakingLayer.sol";
+import {SlashingInput, StakingHub} from "../StakingHub.sol";
 
 /// @title Slasher Example With Double Signing
 /// @author Polygon Labs
@@ -11,18 +11,18 @@ import {SlashingInput, StakingLayer} from "../StakingLayer.sol";
 contract Slasher is ISlasher {
     address immutable service;
     uint256 immutable serviceId;
-    StakingLayer immutable stakingLayer;
+    StakingHub immutable stakingHub;
 
     /// @notice amount of time the staker has to prove their innocence.
     uint256 public constant GRACE_PERIOD = 4 days;
 
     mapping(address => uint256) public gracePeriodEnds;
 
-    constructor(StakingLayer stakingLayer_) {
+    constructor(StakingHub stakingHub_) {
         // deployed by service in this example
-        stakingLayer = stakingLayer_;
+        stakingHub = stakingHub_;
         service = msg.sender;
-        serviceId = stakingLayer_.services(msg.sender);
+        serviceId = stakingHub_.services(msg.sender);
     }
 
     function freeze(address staker, bytes calldata proof) public {
@@ -32,7 +32,7 @@ contract Slasher is ISlasher {
 
         gracePeriodEnds[staker] = block.timestamp + GRACE_PERIOD;
 
-        stakingLayer.onFreeze(serviceId, staker);
+        stakingHub.onFreeze(serviceId, staker);
     }
 
     function unfreeze(address staker) public {
@@ -41,7 +41,7 @@ contract Slasher is ISlasher {
 
         delete gracePeriodEnds[staker];
 
-        stakingLayer.onUnfreeze(serviceId, staker);
+        stakingHub.onUnfreeze(serviceId, staker);
     }
 
     function proveInnocence(bytes calldata proof) public {
@@ -50,7 +50,7 @@ contract Slasher is ISlasher {
 
         if (_verifyProof(msg.sender, proof)) {
             delete gracePeriodEnds[msg.sender];
-            stakingLayer.onUnfreeze(serviceId, msg.sender);
+            stakingHub.onUnfreeze(serviceId, msg.sender);
         } else {
             revert("Slasher: Proof Invalid");
         }
@@ -67,7 +67,7 @@ contract Slasher is ISlasher {
         SlashingInput[] memory input = new SlashingInput[](1);
         input[0] = slashingInputs;
 
-        stakingLayer.onSlash(serviceId, staker, input);
+        stakingHub.onSlash(serviceId, staker, input);
     }
 
     function _verifyProof(address, bytes calldata) internal pure returns (bool) {
