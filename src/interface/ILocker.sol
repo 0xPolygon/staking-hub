@@ -15,7 +15,7 @@ interface ILocker {
     /// @dev Called by the Staking Hub when a staker is slashed
     /// @dev burns funds immediately
     /// @dev Uses freezeStart to snapshot balance if not already snapshotted for that freezeStart.
-    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external;
+    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external returns (uint256 newBalance);
 
     /// @return locker id used to identify the locker in the hub
     function id() external view returns (uint256);

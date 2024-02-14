@@ -89,31 +89,40 @@ abstract contract SlashingManager is ServiceManager {
     }
 
     function _slash(address staker, address slasher, uint8[] calldata percentages) internal {
+        // get service and check that staker is subscribed and already frozen
         uint256 service = _slashers.services[slasher];
         require(_isSubscribed(staker, service), "Not subscribed");
         require(_isFrozenBy(staker, service), "Staker not frozen by this service");
+
         uint256[] memory lockers = _services.data[service].lockers;
         uint256 len = lockers.length;
+
         require(len == percentages.length, "Invalid number of percentages");
+
         uint256 maxSlashingPercentages = _services.data[service].slashingPercentages;
         uint40 freezeStart = _slashers.data[staker].freezeStart;
         ServiceSlashingData storage serviceData = _slashers.data[staker].serviceData[freezeStart][service];
         uint256 currentSlashingPercentages = serviceData.slashedPercentages; // slashed so far in the freeze period
+
         for (uint256 i; i < len; ++i) {
             uint8 percentage = percentages[i];
             if (percentage == 0) continue;
             uint256 locker_ = lockers[i];
             uint8 currentPercentage = currentSlashingPercentages.get(i);
-            // For this freeze period? Yes. (the service calculates the percentage on the original amount before submitting)
+
+            // The service calculates the percentage on the original amount before submitting)
             if (currentPercentage + percentage > maxSlashingPercentages.get(i)) {
                 // the staker's stake cannot change in the meantime
                 revert("Slashing exceeds maximum");
             }
+
             // The cumulative of all for this period (can not exceed the max)
             currentSlashingPercentages.set(currentPercentage + percentage, i);
-            locker(locker_).onSlash(staker, service, percentage, freezeStart);
-            emit StakerSlashed(staker, service, locker_, percentage);
+            uint256 newBalance = locker(locker_).onSlash(staker, service, percentage, freezeStart);
+
+            emit StakerSlashed(staker, service, locker_, percentage, newBalance);
         }
+
         serviceData.slashedPercentages = currentSlashingPercentages;
     }
 

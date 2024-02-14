@@ -17,6 +17,6 @@ interface IStakingHub {
     event SlasherUpdateInitiated(uint256 indexed serviceId, address indexed newSlasher);
     event SlasherUpdated(uint256 indexed serviceId, address indexed slasher);
     event StakerFrozen(address indexed staker, uint256 indexed serviceId, uint256 until);
-    event StakerSlashed(address indexed staker, uint256 indexed serviceId, uint256 indexed lockerId, uint8 percentage);
+    event StakerSlashed(address indexed staker, uint256 indexed serviceId, uint256 indexed lockerId, uint8 percentage, uint256 newBalance);
     event SlashedStakeBurned(uint256 indexed lockerId, address indexed staker);
 }

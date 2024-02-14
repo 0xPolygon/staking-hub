@@ -22,8 +22,4 @@ interface IService {
     /// @dev The Service can revert when the subscription hasn't expired.
     function onCancelSubscription(address staker) external returns (bool finalizeImmediately);
     function onUnsubscribe(address staker) external;
-
-    /// @notice Functionality not defined.
-    /// @dev Called by the Hub when a Staker has been frozen by a Slasher of the Service.
-    function onFreeze(address staker) external;
 }

@@ -78,11 +78,11 @@ abstract contract LockerBase is ILocker {
         _onUnsubscribe(staker, service, maxSlashPercentage);
     }
 
-    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external {
+    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external returns (uint256 newBalance) {
         require(msg.sender == address(_stakingHub), "Unauthorized");
         SlashingData storage slashingData = _getSlashingData(staker, freezeStart);
         uint256 totalSlashed = slashingData.totalSlashed;
-        if (totalSlashed == 100) return;
+        if (totalSlashed == 100) return 0;
         if (totalSlashed + percentage > 100) {
             percentage = uint8(100 - totalSlashed);
             totalSlashed = 100;
@@ -91,6 +91,7 @@ abstract contract LockerBase is ILocker {
         }
         uint256 amount = (slashingData.initialBalance * percentage) / 100;
         _onSlash(staker, service, amount);
+        return amount;
     }
 
     function balanceOf(address staker) external view returns (uint256 balance) {

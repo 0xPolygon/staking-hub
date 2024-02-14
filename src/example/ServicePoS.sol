@@ -2,6 +2,8 @@
 pragma solidity 0.8.24;
 
 import {IService} from "../interface/IService.sol";
+import {ISlasher} from "./interface/ISlasher.sol";
+import {LockerBase} from "../template/LockerBase.sol";
 import {StakingHub, SlashingInput} from "../StakingHub.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -11,11 +13,15 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /// @notice Stakers can subscribe to this Service using the Staking-Layer.
 contract ServicePoS is IService, Ownable {
     StakingHub immutable stakingHub;
+    ISlasher immutable slasher;
+    LockerBase[] lockerContracts;
 
     // self-registers as Service, set msg.sender as owner
-    constructor(address _stakingHub, SlashingInput[] memory _lockers, uint40 unstakingNoticePeriod, address slasher) Ownable(msg.sender) {
+    constructor(address _stakingHub, SlashingInput[] memory _lockers, LockerBase[] memory _lockerContracts, uint40 unstakingNoticePeriod, address _slasher) Ownable(msg.sender) {
         stakingHub = StakingHub(_stakingHub);
-        stakingHub.registerService(_lockers, unstakingNoticePeriod, slasher);
+        stakingHub.registerService(_lockers, unstakingNoticePeriod, _slasher);
+        slasher = ISlasher(_slasher);
+        lockerContracts = _lockerContracts;
     }
 
     function initiateSlasherUpdate(address _slasher) public onlyOwner {
@@ -26,12 +32,18 @@ contract ServicePoS is IService, Ownable {
         stakingHub.finalizeSlasherUpdate();
     }
 
+    function freeze(address staker, bytes calldata proof) public onlyOwner {
+        slasher.freeze(staker, proof);
+    }
+
+    function slash(address staker, uint8[] calldata percentages) public {
+        slasher.slash(staker, percentages);
+    }
+
     // ========== TRIGGERS ==========
     function onSubscribe(address staker) public {
         // i.e. check that staker has sufficient funds in all required lockers
     }
     function onCancelSubscription(address staker) public returns (bool finalizeImmediately) {}
     function onUnsubscribe(address staker) public {}
-
-    function onFreeze(address staker) public {}
 }
