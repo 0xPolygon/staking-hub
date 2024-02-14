@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity 0.8.24;
 
-import {SlashingInput} from "../interface/IStakingHub.sol";
+import {LockerSettings} from "../interface/IStakingHub.sol";
 import {StakerManager} from "./StakerManager.sol";
 import {PackedUints} from "../lib/PackedUints.sol";
 import {IService} from "../interface/IService.sol";
@@ -26,7 +26,10 @@ abstract contract ServiceManager is StakerManager {
 
     ServiceStorage internal _services;
 
-    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint256[] memory minAmounts, uint40 cancelationPeriod) internal returns (uint256 id) {
+    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint256[] memory minAmounts, uint40 cancelationPeriod)
+        internal
+        returns (uint256 id)
+    {
         require(service.code.length != 0, "Service contract not found");
         require(_services.ids[service] == 0, "Service already registered");
         require(cancelationPeriod > 0, "Invalid cancelation period");
@@ -36,25 +39,29 @@ abstract contract ServiceManager is StakerManager {
         emit ServiceRegistered(service, id);
     }
 
-    function _formatLockers(SlashingInput[] calldata lockers) internal view returns (uint256[] memory formatted, uint256 slashingPercentages, uint256[] memory minAmounts) {
+    function _formatLockers(LockerSettings[] calldata lockers)
+        internal
+        view
+        returns (uint256[] memory formatted, uint256 slashingPercentages, uint256[] memory minAmounts)
+    {
         _validateLockers(lockers);
         uint256 len = lockers.length;
         formatted = new uint256[](len);
         for (uint256 i; i < len; ++i) {
             formatted[i] = lockers[i].lockerId;
-            slashingPercentages.set(lockers[i].percentage, i);
+            slashingPercentages.set(lockers[i].maxSlashPercentage, i);
             minAmounts[i] = lockers[i].minAmount;
         }
     }
 
-    function _validateLockers(SlashingInput[] calldata lockers) private view {
+    function _validateLockers(LockerSettings[] calldata lockers) private view {
         uint256 len = lockers.length;
         if (len == 0 || len > 32) revert("Invalid number of lockers");
         uint256 lastId;
         for (uint256 i = 0; i < len; ++i) {
             uint256 lockerId_ = lockers[i].lockerId;
             require(lockerId_ > lastId, "Duplicate Locker or unsorted list");
-            require(lockers[i].percentage < 101, "Invalid slashing percentage");
+            require(lockers[i].maxSlashPercentage < 101, "Invalid max slash percentage");
         }
         require(lastId <= _lockerStorage.counter, "Invalid locker");
     }

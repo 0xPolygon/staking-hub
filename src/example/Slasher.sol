@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-
 import {ISlasher} from "./interface/ISlasher.sol";
-import {SlashingInput, StakingHub} from "../StakingHub.sol";
+import {StakingHub} from "../StakingHub.sol";
 
 /// @title Slasher Example With Double Signing
 /// @author Polygon Labs
@@ -60,4 +59,3 @@ contract Slasher is ISlasher {
         return true;
     }
 }
-

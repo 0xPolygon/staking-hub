@@ -31,11 +31,12 @@ abstract contract StakerManager is LockerManager {
         emit Subscribed(staker, service, lockedInUntil);
     }
 
-    function _cancelSubscription(address staker, uint256 service) internal {
+    function _cancelSubscription(address staker, uint256 service) internal returns (uint40 unsubscribableFrom) {
         Subscription storage sub = _stakers.subscriptions[staker][service];
         require(sub.subscribed, "Not subscribed");
         require(sub.unsubscribableFrom == 0, "Subscription already canceled");
-        sub.unsubscribableFrom = uint40(block.timestamp + _cancelationPeriod(service));
+        unsubscribableFrom = uint40(block.timestamp + _cancelationPeriod(service));
+        sub.unsubscribableFrom = unsubscribableFrom;
         emit SubscriptionCanceled(staker, service);
     }
 

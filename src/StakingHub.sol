@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {SlashingManager} from "./staking-layer/SlashingManager.sol";
-import {SlashingInput} from "./interface/IStakingHub.sol";
+import {LockerSettings} from "./interface/IStakingHub.sol";
 import {PackedUints} from "./lib/PackedUints.sol";
 
 contract StakingHub is SlashingManager {
@@ -12,7 +12,7 @@ contract StakingHub is SlashingManager {
         return _setLocker(msg.sender);
     }
 
-    function registerService(SlashingInput[] calldata lockers, uint40 unstakingNoticePeriod, address slasher) external returns (uint256 id) {
+    function registerService(LockerSettings[] calldata lockers, uint40 unstakingNoticePeriod, address slasher) external returns (uint256 id) {
         require(slasher != address(0), "Invalid slasher");
         (uint256[] memory lockerIds, uint256 slashingPercentages, uint256[] memory minAmounts) = _formatLockers(lockers);
         id = _setService(msg.sender, lockerIds, slashingPercentages, minAmounts, unstakingNoticePeriod);
@@ -31,8 +31,8 @@ contract StakingHub is SlashingManager {
         _service(service).onSubscribe(msg.sender);
     }
 
-    function cancelSubscription(uint256 service) external notFrozen {
-        _cancelSubscription(msg.sender, service);
+    function cancelSubscription(uint256 service) external notFrozen returns (uint40 unsubscribableFrom) {
+        unsubscribableFrom = _cancelSubscription(msg.sender, service);
         if (_isLockedIn(msg.sender, service)) {
             _service(service).onCancelSubscription(msg.sender);
         } else {

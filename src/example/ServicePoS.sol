@@ -4,7 +4,7 @@ pragma solidity 0.8.24;
 import {IService} from "../interface/IService.sol";
 import {ISlasher} from "./interface/ISlasher.sol";
 import {LockerBase} from "../template/LockerBase.sol";
-import {StakingHub, SlashingInput} from "../StakingHub.sol";
+import {StakingHub, LockerSettings} from "../StakingHub.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title ServicePoS
@@ -17,7 +17,9 @@ contract ServicePoS is IService, Ownable {
     LockerBase[] lockerContracts;
 
     // self-registers as Service, set msg.sender as owner
-    constructor(address _stakingHub, SlashingInput[] memory _lockers, LockerBase[] memory _lockerContracts, uint40 unstakingNoticePeriod, address _slasher) Ownable(msg.sender) {
+    constructor(address _stakingHub, LockerSettings[] memory _lockers, LockerBase[] memory _lockerContracts, uint40 unstakingNoticePeriod, address _slasher)
+        Ownable(msg.sender)
+    {
         stakingHub = StakingHub(_stakingHub);
 
         stakingHub.registerService(_lockers, unstakingNoticePeriod, _slasher);

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity 0.8.24;
 
-struct SlashingInput {
+struct LockerSettings {
     uint256 lockerId;
-    uint8 percentage;
+    uint8 maxSlashPercentage;
     uint256 minAmount;
 }
 
