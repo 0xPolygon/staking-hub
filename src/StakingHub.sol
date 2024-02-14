@@ -14,8 +14,8 @@ contract StakingHub is SlashingManager {
 
     function registerService(SlashingInput[] calldata lockers, uint40 unstakingNoticePeriod, address slasher) external returns (uint256 id) {
         require(slasher != address(0), "Invalid slasher");
-        (uint256[] memory lockerIds, uint256 slashingPercentages) = _formatLockers(lockers);
-        id = _setService(msg.sender, lockerIds, slashingPercentages, unstakingNoticePeriod);
+        (uint256[] memory lockerIds, uint256 slashingPercentages, uint256[] memory minAmounts) = _formatLockers(lockers);
+        id = _setService(msg.sender, lockerIds, slashingPercentages, minAmounts, unstakingNoticePeriod);
         _setSlasher(id, slasher);
     }
 
@@ -87,6 +87,10 @@ contract StakingHub is SlashingManager {
 
     function slash(address staker, uint8[] calldata percentages) external {
         _slash(staker, msg.sender, percentages);
+    }
+
+    function kickOut(address staker, uint256 lockerIndex) external {
+        _kickOut(staker, lockerIndex, _serviceId(msg.sender));
     }
 
     function isFrozen(address staker) external view returns (bool) {

@@ -5,6 +5,7 @@ import {SlashingInput} from "../interface/IStakingHub.sol";
 import {StakerManager} from "./StakerManager.sol";
 import {PackedUints} from "../lib/PackedUints.sol";
 import {IService} from "../interface/IService.sol";
+import {ILocker} from "../interface/ILocker.sol";
 
 abstract contract ServiceManager is StakerManager {
     using PackedUints for uint256;
@@ -13,6 +14,7 @@ abstract contract ServiceManager is StakerManager {
         address service;
         uint256[] lockers;
         uint256 slashingPercentages;
+        uint256[] minAmounts;
         uint40 cancelationPeriod;
     }
 
@@ -24,23 +26,24 @@ abstract contract ServiceManager is StakerManager {
 
     ServiceStorage internal _services;
 
-    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint40 cancelationPeriod) internal returns (uint256 id) {
+    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint256[] memory minAmounts, uint40 cancelationPeriod) internal returns (uint256 id) {
         require(service.code.length != 0, "Service contract not found");
         require(_services.ids[service] == 0, "Service already registered");
         require(cancelationPeriod > 0, "Invalid cancelation period");
         id = ++_services.counter;
         _services.ids[service] = id;
-        _services.data[id] = Service(service, lockers, slashingPercentages, cancelationPeriod);
+        _services.data[id] = Service(service, lockers, slashingPercentages, minAmounts, cancelationPeriod);
         emit ServiceRegistered(service, id);
     }
 
-    function _formatLockers(SlashingInput[] calldata lockers) internal view returns (uint256[] memory formatted, uint256 slashingPercentages) {
+    function _formatLockers(SlashingInput[] calldata lockers) internal view returns (uint256[] memory formatted, uint256 slashingPercentages, uint256[] memory minAmounts) {
         _validateLockers(lockers);
         uint256 len = lockers.length;
         formatted = new uint256[](len);
         for (uint256 i; i < len; ++i) {
             formatted[i] = lockers[i].lockerId;
             slashingPercentages.set(lockers[i].percentage, i);
+            minAmounts[i] = lockers[i].minAmount;
         }
     }
 
@@ -54,6 +57,16 @@ abstract contract ServiceManager is StakerManager {
             require(lockers[i].percentage < 101, "Invalid slashing percentage");
         }
         require(lastId <= _lockerStorage.counter, "Invalid locker");
+    }
+
+    function _kickOut(address staker, uint256 lockerIndex, uint256 serviceId) internal {
+        Service memory service = _services.data[serviceId];
+        ILocker lockerInstance = ILocker(locker(service.lockers[lockerIndex]));
+
+        // balance has to be smaller than minAmount
+        require(service.minAmounts[lockerIndex] > lockerInstance.balanceOf(staker), "StakingHub: kickout criteria not met");
+
+        _unsubscribe(staker, serviceId, true);
     }
 
     function _serviceId(address service) internal view returns (uint256 id) {

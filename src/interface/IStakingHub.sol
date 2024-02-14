@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 struct SlashingInput {
     uint256 lockerId;
     uint8 percentage;
+    uint256 minAmount;
 }
 
 interface IStakingHub {

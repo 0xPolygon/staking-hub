@@ -19,7 +19,9 @@ contract ServicePoS is IService, Ownable {
     // self-registers as Service, set msg.sender as owner
     constructor(address _stakingHub, SlashingInput[] memory _lockers, LockerBase[] memory _lockerContracts, uint40 unstakingNoticePeriod, address _slasher) Ownable(msg.sender) {
         stakingHub = StakingHub(_stakingHub);
+
         stakingHub.registerService(_lockers, unstakingNoticePeriod, _slasher);
+
         slasher = ISlasher(_slasher);
         lockerContracts = _lockerContracts;
     }
@@ -38,6 +40,11 @@ contract ServicePoS is IService, Ownable {
 
     function slash(address staker, uint8[] calldata percentages) public {
         slasher.slash(staker, percentages);
+    }
+
+    /// @notice callable by eyeryone, validity checked in Hub
+    function kickStaker(address staker, uint256 offendingLockerIndex) public {
+        stakingHub.kickOut(staker, offendingLockerIndex);
     }
 
     // ========== TRIGGERS ==========
