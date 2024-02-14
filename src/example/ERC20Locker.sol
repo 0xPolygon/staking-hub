@@ -25,10 +25,18 @@ contract ERC20Locker is LockerBase {
     }
 
     function deposit(uint256 amount) external {
-        require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
-        _balances[msg.sender] += amount;
+        _deposit(msg.sender, amount);
+    }
+
+    function depositFor(address user, uint256 amount) external {
+        _deposit(user, amount);
+    }
+
+    function _deposit(address user, uint256 amount) private {
+        require(!_stakingHub.isFrozen(user), "Staker is frozen");
+        _balances[user] += amount;
         _globalTotalSupply += amount;
-        uint256[] memory services = getServices(msg.sender);
+        uint256[] memory services = getServices(user);
         uint256 len = services.length;
         for (uint256 i; i < len; ++i) {
             _serviceSupplies[services[i]] += amount;
