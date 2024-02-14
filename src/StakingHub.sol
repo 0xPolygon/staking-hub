@@ -26,7 +26,7 @@ contract StakingHub is SlashingManager {
         uint256 slashingPercentages = _slashingPercentages(service);
         uint256 len = lockers.length;
         for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onSubscribe(msg.sender, service, slashingPercentages.get(i), LOCKER_RISK_MAXIMUM);
+            locker(lockers[i]).onSubscribe(msg.sender, service, slashingPercentages.get(i));
         }
     }
 
@@ -56,7 +56,7 @@ contract StakingHub is SlashingManager {
         uint256 len = lockers.length;
         // Note: A service needs to trust the lockers not to revert on the call
         for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onUnsubscribe(msg.sender, service);
+            locker(lockers[i]).onUnsubscribe(msg.sender, service, _slashingPercentages(service).get(i));
         }
     }
 
@@ -68,7 +68,7 @@ contract StakingHub is SlashingManager {
         uint256 len = lockers.length;
         // Note: A service needs to trust the lockers not to revert on the call
         for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onUnsubscribe(msg.sender, service);
+            locker(lockers[i]).onUnsubscribe(msg.sender, service, _slashingPercentages(service).get(i));
         }
     }
 
@@ -88,15 +88,7 @@ contract StakingHub is SlashingManager {
         _slash(staker, msg.sender, percentages);
     }
 
-    function slashedPercentage(uint256 lockerId_, address staker) external view returns (uint8 percentage) {
-        return _laggingSlashedPercentage(lockerId_, staker);
-    }
-
-    function totalSlashedPercentage(uint256 lockerId_) external view returns (uint8 percentage) {
-        // TODO
-    }
-
-    function onBurn(address staker) external {
-        _onBurn(lockerId(msg.sender), staker);
+    function isFrozen(address staker) external view returns (bool) {
+        return _isFrozen(staker);
     }
 }

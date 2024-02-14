@@ -21,8 +21,8 @@ struct ServiceSlashingData {
 
 // Per staker
 struct Slashing {
-    uint256 freezeStart;
-    uint256 freezeEnd;
+    uint40 freezeStart;
+    uint40 freezeEnd;
     mapping(uint256 freezeStart => mapping(uint256 service => ServiceSlashingData)) serviceData;
 }
 
@@ -30,7 +30,6 @@ abstract contract SlashingManager is ServiceManager {
     using PackedUints for uint256;
 
     uint256 internal constant SLASHER_UPDATE_TIMELOCK = 7 days;
-    uint8 internal constant LOCKER_RISK_MAXIMUM = 100;
     uint256 internal constant STAKER_FREEZE_PERIOD = 7 days;
 
     struct SlashingStorage {
@@ -79,13 +78,13 @@ abstract contract SlashingManager is ServiceManager {
         emit StakerFrozen(staker, service, end);
     }
 
-    function _updateFreezePeriod(address staker, uint256 byService) internal returns (uint256 end) {
+    function _updateFreezePeriod(address staker, uint256 byService) internal returns (uint40 end) {
         Slashing storage data = _slashers.data[staker];
         if (data.freezeEnd < block.timestamp) {
-            data.freezeStart = block.timestamp;
+            data.freezeStart = uint40(block.timestamp);
         }
         data.serviceData[block.timestamp][byService].frozen = true;
-        end = block.timestamp + STAKER_FREEZE_PERIOD;
+        end = uint40(block.timestamp + STAKER_FREEZE_PERIOD);
         data.freezeEnd = end;
     }
 
@@ -97,7 +96,7 @@ abstract contract SlashingManager is ServiceManager {
         uint256 len = lockers.length;
         require(len == percentages.length, "Invalid number of percentages");
         uint256 maxSlashingPercentages = _services.data[service].slashingPercentages;
-        uint256 freezeStart = _slashers.data[staker].freezeStart;
+        uint40 freezeStart = _slashers.data[staker].freezeStart;
         ServiceSlashingData storage serviceData = _slashers.data[staker].serviceData[freezeStart][service];
         uint256 currentSlashingPercentages = serviceData.slashedPercentages; // slashed so far in the freeze period
         for (uint256 i; i < len; ++i) {
