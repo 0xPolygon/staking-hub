@@ -88,7 +88,7 @@ abstract contract SlashingManager is ServiceManager {
         data.freezeEnd = end;
     }
 
-    function _slash(address staker, address slasher, uint8[] calldata percentages) internal {
+    function _slash(address staker, address slasher, uint8[] calldata percentages) internal returns (uint256[] memory newBalances) {
         // get service and check that staker is subscribed and already frozen
         uint256 service = _slashers.services[slasher];
         require(_isSubscribed(staker, service), "Not subscribed");
@@ -104,6 +104,8 @@ abstract contract SlashingManager is ServiceManager {
         ServiceSlashingData storage serviceData = _slashers.data[staker].serviceData[freezeStart][service];
         uint256 currentSlashingPercentages = serviceData.slashedPercentages; // slashed so far in the freeze period
 
+        newBalances = new uint256[](len);
+
         for (uint256 i; i < len; ++i) {
             uint8 percentage = percentages[i];
             if (percentage == 0) continue;
@@ -118,9 +120,9 @@ abstract contract SlashingManager is ServiceManager {
 
             // The cumulative of all for this period (can not exceed the max)
             currentSlashingPercentages.set(currentPercentage + percentage, i);
-            uint256 newBalance = locker(locker_).onSlash(staker, service, percentage, freezeStart);
+            newBalances[i] = locker(locker_).onSlash(staker, service, percentage, freezeStart);
 
-            emit StakerSlashed(staker, service, locker_, percentage, newBalance);
+            emit StakerSlashed(staker, service, locker_, percentage, newBalances[i]);
         }
 
         serviceData.slashedPercentages = currentSlashingPercentages;

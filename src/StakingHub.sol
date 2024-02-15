@@ -85,8 +85,8 @@ contract StakingHub is SlashingManager {
         _freeze(staker, msg.sender);
     }
 
-    function slash(address staker, uint8[] calldata percentages) external {
-        _slash(staker, msg.sender, percentages);
+    function slash(address staker, uint8[] calldata percentages) external returns (uint256[] memory newBalances) {
+        return _slash(staker, msg.sender, percentages);
     }
 
     function kickOut(address staker, uint256 lockerIndex) external {
