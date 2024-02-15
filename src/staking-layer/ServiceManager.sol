@@ -15,7 +15,7 @@ abstract contract ServiceManager is StakerManager {
         uint256[] lockers;
         uint256 slashingPercentages;
         uint256[] minAmounts;
-        uint40 cancelationPeriod;
+        uint40 unsubNotice;
     }
 
     struct ServiceStorage {
@@ -26,16 +26,16 @@ abstract contract ServiceManager is StakerManager {
 
     ServiceStorage internal _services;
 
-    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint256[] memory minAmounts, uint40 cancelationPeriod)
+    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint256[] memory minAmounts, uint40 unsubNotice)
         internal
         returns (uint256 id)
     {
         require(service.code.length != 0, "Service contract not found");
         require(_services.ids[service] == 0, "Service already registered");
-        require(cancelationPeriod > 0, "Invalid cancelation period");
+        require(unsubNotice > 0, "Invalid unsubscription notice");
         id = ++_services.counter;
         _services.ids[service] = id;
-        _services.data[id] = Service(service, lockers, slashingPercentages, minAmounts, cancelationPeriod);
+        _services.data[id] = Service(service, lockers, slashingPercentages, minAmounts, unsubNotice);
         emit ServiceRegistered(service, id);
     }
 
@@ -98,8 +98,8 @@ abstract contract ServiceManager is StakerManager {
         percentage = _services.data[id].slashingPercentages.get(index);
     }
 
-    function _cancelationPeriod(uint256 id) internal view override returns (uint40 notice) {
-        notice = _services.data[id].cancelationPeriod;
+    function _unsubNotice(uint256 id) internal view override returns (uint40 notice) {
+        notice = _services.data[id].unsubNotice;
     }
 
     function _isSubscribed(address staker, uint256 id) internal view returns (bool) {

@@ -35,7 +35,7 @@ abstract contract StakerManager is LockerManager {
         Subscription storage sub = _stakers.subscriptions[staker][service];
         require(sub.subscribed, "Not subscribed");
         require(sub.unsubscribableFrom == 0, "Subscription already canceled");
-        unsubscribableFrom = uint40(block.timestamp + _cancelationPeriod(service));
+        unsubscribableFrom = uint40(block.timestamp + _unsubNotice(service));
         sub.unsubscribableFrom = unsubscribableFrom;
         emit SubscriptionCanceled(staker, service);
     }
@@ -57,5 +57,5 @@ abstract contract StakerManager is LockerManager {
         return _stakers.subscriptions[staker][service].lockedInUntil > block.timestamp;
     }
 
-    function _cancelationPeriod(uint256 service) internal view virtual returns (uint40 notice);
+    function _unsubNotice(uint256 service) internal view virtual returns (uint40 notice);
 }

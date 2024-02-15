@@ -17,12 +17,12 @@ contract ServicePoS is IService, Ownable {
     LockerBase[] lockerContracts;
 
     // self-registers as Service, set msg.sender as owner
-    constructor(address _stakingHub, LockerSettings[] memory _lockers, LockerBase[] memory _lockerContracts, uint40 unstakingNoticePeriod, address _slasher)
+    constructor(address _stakingHub, LockerSettings[] memory _lockers, LockerBase[] memory _lockerContracts, uint40 unsubNotice, address _slasher)
         Ownable(msg.sender)
     {
         stakingHub = StakingHub(_stakingHub);
 
-        stakingHub.registerService(_lockers, unstakingNoticePeriod, _slasher);
+        stakingHub.registerService(_lockers, unsubNotice, _slasher);
 
         slasher = ISlasher(_slasher);
         lockerContracts = _lockerContracts;
