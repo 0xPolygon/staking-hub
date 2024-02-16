@@ -35,7 +35,7 @@ contract StakingHub is SlashingManager {
     }
 
     function initiateUnsubscribe(uint256 service) external notFrozen returns (uint40 unsubscribableFrom) {
-        unsubscribableFrom = _initiateUnsubscribe(msg.sender, service);
+        unsubscribableFrom = _cancelSubscription(msg.sender, service);
 
         if (_isLockedIn(msg.sender, service)) {
             _service(service).onInitiateUnsubscribe(msg.sender);
@@ -48,20 +48,20 @@ contract StakingHub is SlashingManager {
     }
 
     function finalizeUnsubscribe(uint256 service) external notFrozen {
-        _finalizeUnsubscribe(msg.sender, service, false);
+        _unsubscribe(msg.sender, service, false);
 
-        _unsubscribe(msg.sender, service);
+        _notifyServiceAndLockers(msg.sender, service);
     }
 
     function terminate(address staker) external {
         uint256 service = _serviceId(msg.sender);
 
-        _finalizeUnsubscribe(staker, service, true);
+        _unsubscribe(staker, service, true);
 
-        _unsubscribe(staker, service);
+        _notifyServiceAndLockers(staker, service);
     }
 
-    function _unsubscribe(address staker, uint256 service) private {
+    function _notifyServiceAndLockers(address staker, uint256 service) private {
         if (_isLockedIn(staker, service)) {
             _service(service).onFinalizeUnsubscribe(staker);
         } else {
