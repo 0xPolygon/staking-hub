@@ -34,14 +34,18 @@ contract ERC20Locker is LockerBase {
 
     function _deposit(address user, uint256 amount) private {
         require(!_stakingHub.isFrozen(user), "Staker is frozen");
+
         _balances[user] += amount;
         _globalTotalSupply += amount;
+
         uint256[] memory services = getServices(user);
         uint256 len = services.length;
         for (uint256 i; i < len; ++i) {
             _serviceSupplies[services[i]] += amount;
         }
+
         underlying.transferFrom(msg.sender, address(this), amount);
+
         emit BalanceChanged(msg.sender, _balances[msg.sender]);
     }
 
@@ -50,14 +54,18 @@ contract ERC20Locker is LockerBase {
     function initiateWithdrawal(uint256 amount) external {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
         require(amount <= _balances[msg.sender], "Insufficient balance");
+
         _registerWithdrawal(msg.sender, amount);
+
         _balances[msg.sender] -= amount;
         _globalTotalSupply -= amount;
+
         uint256[] memory services = getServices(msg.sender);
         uint256 len = services.length;
         for (uint256 i; i < len; ++i) {
             _serviceSupplies[services[i]] -= amount;
         }
+
         emit BalanceChanged(msg.sender, _balances[msg.sender]);
     }
 
@@ -65,15 +73,20 @@ contract ERC20Locker is LockerBase {
     /// @notice no _balances adjustment is made, as already subtracted in initiateWithdrawal
     function finalizeWithdrawal() external returns (uint256 amount) {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
+
         amount = _finalizeWithdrawal(msg.sender);
         underlying.transfer(msg.sender, amount);
+
+        emit WithdrawalFinalized(msg.sender, amount);
     }
 
     function _onSlash(address staker, uint256, uint256 amount) internal virtual override {
         uint256 remainder = _slashPendingWithdrawal(staker, amount);
+
         if (remainder != 0) {
             _balances[msg.sender] -= remainder;
             _globalTotalSupply -= remainder;
+
             uint256[] memory services = getServices(msg.sender);
             uint256 len = services.length;
             for (uint256 i; i < len; ++i) {
@@ -81,6 +94,7 @@ contract ERC20Locker is LockerBase {
             }
         }
         underlying.transfer(_burnAddress, amount);
+
         emit BalanceChanged(msg.sender, _balances[msg.sender]);
     }
 

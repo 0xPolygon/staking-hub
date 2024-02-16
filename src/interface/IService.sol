@@ -13,6 +13,7 @@ interface IService {
     /// @notice Performs all neccessary checks on the Staker (e.g., voting power, whitelist, BLS-key, etc.).
     /// @dev Called by the Hub when a Staker subscribes to the Service.
     /// @dev The Service can revert.
+    /// @param staker The address of the Staker
     function onSubscribe(address staker) external;
 
     /// @notice Lets a Staker unstake from the Service.
@@ -20,6 +21,11 @@ interface IService {
     /// @notice A Service that requires unstaking notice may still choose allow the Staker to finalize the unstaking immediately.
     /// @dev Called by the Hub when a Staker unsubscribes from the Service.
     /// @dev The Service can revert when the subscription hasn't expired.
+    /// @param staker The address of the Staker
     function onCancelSubscription(address staker) external returns (bool finalizeImmediately);
+
+    /// @dev Triggered by hub.
+    /// @dev Reverting not allowed if staker is not locked-in.
+    /// @param staker The address of the Staker
     function onUnsubscribe(address staker) external;
 }

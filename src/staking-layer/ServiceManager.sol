@@ -57,13 +57,6 @@ abstract contract ServiceManager is StakerManager {
         require(lastId <= _lockerStorage.counter, "Invalid locker");
     }
 
-    function _kickOut(address staker, uint256 serviceId) internal {
-        // TODO when being kicked out for balance falling under threshold due to withdrawing,
-        // I circumvented the locking mechanism and should be penalised
-
-        _unsubscribe(staker, serviceId, true);
-    }
-
     function _serviceId(address service) internal view returns (uint256 id) {
         id = _services.ids[service];
         require(id != 0, "Service not registered");

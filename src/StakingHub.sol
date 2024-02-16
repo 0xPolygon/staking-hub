@@ -14,6 +14,7 @@ contract StakingHub is SlashingManager {
 
     function registerService(LockerSettings[] calldata lockers, uint40 unsubNotice, address slasher) external returns (uint256 id) {
         require(slasher != address(0), "Invalid slasher");
+
         (uint256[] memory lockerIds, uint256 slashingPercentages) = _formatLockers(lockers);
         id = _setService(msg.sender, lockerIds, slashingPercentages, unsubNotice);
         _setSlasher(id, slasher);
@@ -21,7 +22,9 @@ contract StakingHub is SlashingManager {
 
     function subscribe(uint256 service, uint40 lockInUntil) external notFrozen {
         require(service != 0 && service <= _services.counter, "Invalid service");
+
         _subscribe(msg.sender, service, lockInUntil);
+
         uint256[] memory lockers = _lockers(service);
         uint256 slashingPercentages = _slashingPercentages(service);
         uint256 len = lockers.length;
@@ -33,6 +36,7 @@ contract StakingHub is SlashingManager {
 
     function cancelSubscription(uint256 service) external notFrozen returns (uint40 unsubscribableFrom) {
         unsubscribableFrom = _cancelSubscription(msg.sender, service);
+
         if (_isLockedIn(msg.sender, service)) {
             _service(service).onCancelSubscription(msg.sender);
         } else {
@@ -45,6 +49,7 @@ contract StakingHub is SlashingManager {
 
     function unsubscribe(uint256 service) external notFrozen {
         _unsubscribe(msg.sender, service, false);
+
         if (_isLockedIn(msg.sender, service)) {
             _service(service).onUnsubscribe(msg.sender);
         } else {
@@ -53,20 +58,26 @@ contract StakingHub is SlashingManager {
                 emit UnsubscriptionWarning(service, msg.sender, revertData);
             }
         }
+
         uint256[] memory lockers = _lockers(service);
         uint256 len = lockers.length;
+
         // Note: A service needs to trust the lockers not to revert on the call
         for (uint256 i; i < len; ++i) {
             locker(lockers[i]).onUnsubscribe(msg.sender, service, _slashingPercentages(service).get(i));
         }
     }
 
-    function unsubscribe(address staker) external {
+    function kickOut(address staker) external {
         require(!_isFrozen(staker), "Staker is frozen");
+
         uint256 service = _serviceId(msg.sender);
+
         _unsubscribe(staker, service, true);
+
         uint256[] memory lockers = _lockers(service);
         uint256 len = lockers.length;
+
         // Note: A service needs to trust the lockers not to revert on the call
         for (uint256 i; i < len; ++i) {
             locker(lockers[i]).onUnsubscribe(msg.sender, service, _slashingPercentages(service).get(i));
@@ -87,10 +98,6 @@ contract StakingHub is SlashingManager {
 
     function slash(address staker, uint8[] calldata percentages) external {
         return _slash(staker, msg.sender, percentages);
-    }
-
-    function kickOut(address staker) external {
-        _kickOut(staker, _serviceId(msg.sender));
     }
 
     function isFrozen(address staker) external view returns (bool) {
