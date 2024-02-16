@@ -34,53 +34,49 @@ contract StakingHub is SlashingManager {
         _service(service).onSubscribe(msg.sender);
     }
 
-    function cancelSubscription(uint256 service) external notFrozen returns (uint40 unsubscribableFrom) {
-        unsubscribableFrom = _cancelSubscription(msg.sender, service);
+    function initiateUnsubscribe(uint256 service) external notFrozen returns (uint40 unsubscribableFrom) {
+        unsubscribableFrom = _initiateUnsubscribe(msg.sender, service);
 
         if (_isLockedIn(msg.sender, service)) {
-            _service(service).onCancelSubscription(msg.sender);
+            _service(service).onInitiateUnsubscribe(msg.sender);
         } else {
-            try _service(service).onCancelSubscription(msg.sender) {}
+            try _service(service).onInitiateUnsubscribe(msg.sender) {}
             catch (bytes memory revertData) {
-                emit SubscriptionCancelationWarning(service, msg.sender, revertData);
+                emit InitiatedUnsubscribeWarning(service, msg.sender, revertData);
             }
         }
     }
 
-    function unsubscribe(uint256 service) external notFrozen {
-        _unsubscribe(msg.sender, service, false);
+    function finalizeUnsubscribe(uint256 service) external notFrozen {
+        _finalizeUnsubscribe(msg.sender, service, false);
 
-        if (_isLockedIn(msg.sender, service)) {
-            _service(service).onUnsubscribe(msg.sender);
-        } else {
-            try _service(service).onUnsubscribe(msg.sender) {}
-            catch (bytes memory revertData) {
-                emit UnsubscriptionWarning(service, msg.sender, revertData);
-            }
-        }
-
-        uint256[] memory lockers = _lockers(service);
-        uint256 len = lockers.length;
-
-        // Note: A service needs to trust the lockers not to revert on the call
-        for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onUnsubscribe(msg.sender, service, _slashingPercentages(service).get(i));
-        }
+        _unsubscribe(msg.sender, service);
     }
 
-    function kickOut(address staker) external {
-        require(!_isFrozen(staker), "Staker is frozen");
-
+    function terminate(address staker) external {
         uint256 service = _serviceId(msg.sender);
 
-        _unsubscribe(staker, service, true);
+        _finalizeUnsubscribe(staker, service, true);
+
+        _unsubscribe(staker, service);
+    }
+
+    function _unsubscribe(address staker, uint256 service) private {
+        if (_isLockedIn(staker, service)) {
+            _service(service).onFinalizeUnsubscribe(staker);
+        } else {
+            try _service(service).onFinalizeUnsubscribe(staker) {}
+            catch (bytes memory revertData) {
+                emit FinalizedUnsubscribeWarning(service, staker, revertData);
+            }
+        }
 
         uint256[] memory lockers = _lockers(service);
         uint256 len = lockers.length;
 
         // Note: A service needs to trust the lockers not to revert on the call
         for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onUnsubscribe(msg.sender, service, _slashingPercentages(service).get(i));
+            locker(lockers[i]).onUnsubscribe(staker, service, _slashingPercentages(service).get(i));
         }
     }
 

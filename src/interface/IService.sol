@@ -22,10 +22,10 @@ interface IService {
     /// @dev Called by the Hub when a Staker unsubscribes from the Service.
     /// @dev The Service can revert when the subscription hasn't expired.
     /// @param staker The address of the Staker
-    function onCancelSubscription(address staker) external returns (bool finalizeImmediately);
+    function onInitiateUnsubscribe(address staker) external returns (bool finalizeImmediately);
 
     /// @dev Triggered by hub.
     /// @dev Reverting not allowed if staker is not locked-in.
     /// @param staker The address of the Staker
-    function onUnsubscribe(address staker) external;
+    function onFinalizeUnsubscribe(address staker) external;
 }

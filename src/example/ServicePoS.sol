@@ -45,8 +45,8 @@ contract ServicePoS is IService, Ownable {
     }
 
     /// @notice services monitor
-    function kickStaker(address staker) public onlyOwner {
-        stakingHub.kickOut(staker);
+    function terminateStaker(address staker) public onlyOwner {
+        stakingHub.terminate(staker);
     }
 
     // ========== TRIGGERS ==========
@@ -54,7 +54,7 @@ contract ServicePoS is IService, Ownable {
         // i.e. check that staker has sufficient funds in all required lockers
     }
 
-    function onCancelSubscription(address staker) public returns (bool finalizeImmediately) {}
+    function onInitiateUnsubscribe(address staker) public returns (bool finalizeImmediately) {}
 
-    function onUnsubscribe(address staker) public {}
+    function onFinalizeUnsubscribe(address staker) public {}
 }

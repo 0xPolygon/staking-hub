@@ -12,8 +12,8 @@ interface IStakingHub {
     event Subscribed(address indexed staker, uint256 indexed serviceId, uint40 lockInUntil);
     event SubscriptionCanceled(address indexed staker, uint256 indexed serviceId);
     event Unsubscribed(address indexed staker, uint256 indexed serviceId);
-    event SubscriptionCancelationWarning(uint256 indexed serviceId, address indexed staker, bytes data);
-    event UnsubscriptionWarning(uint256 indexed serviceId, address indexed staker, bytes data);
+    event InitiatedUnsubscribeWarning(uint256 indexed serviceId, address indexed staker, bytes data);
+    event FinalizedUnsubscribeWarning(uint256 indexed serviceId, address indexed staker, bytes data);
     event SlasherUpdateInitiated(uint256 indexed serviceId, address indexed newSlasher);
     event SlasherUpdated(uint256 indexed serviceId, address indexed slasher);
     event StakerFrozen(address indexed staker, uint256 indexed serviceId, uint256 until);
@@ -34,11 +34,11 @@ interface IStakingHub {
     /// @dev Logs Subscribed.
     function subscribe(uint256 service, uint40 lockInUntil) external;
 
-    function cancelSubscription(uint256 service) external returns (uint40 unsubscribableFrom);
+    function initiateUnsubscribe(uint256 service) external returns (uint40 unsubscribableFrom);
 
-    function unsubscribe(uint256 service) external;
+    function finalizeUnsubscribe(uint256 service) external;
 
-    function kickOut(address staker) external;
+    function terminate(address staker) external;
 
     function initiateSlasherUpdate(address newSlasher) external returns (uint40 scheduledTime);
 
