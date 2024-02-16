@@ -14,7 +14,6 @@ abstract contract ServiceManager is StakerManager {
         address service;
         uint256[] lockers;
         uint256 slashingPercentages;
-        uint256[] minAmounts;
         uint40 unsubNotice;
     }
 
@@ -26,7 +25,7 @@ abstract contract ServiceManager is StakerManager {
 
     ServiceStorage internal _services;
 
-    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint256[] memory minAmounts, uint40 unsubNotice)
+    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint40 unsubNotice)
         internal
         returns (uint256 id)
     {
@@ -35,14 +34,14 @@ abstract contract ServiceManager is StakerManager {
         require(unsubNotice > 0, "Invalid unsubscription notice");
         id = ++_services.counter;
         _services.ids[service] = id;
-        _services.data[id] = Service(service, lockers, slashingPercentages, minAmounts, unsubNotice);
+        _services.data[id] = Service(service, lockers, slashingPercentages, unsubNotice);
         emit ServiceRegistered(service, id);
     }
 
     function _formatLockers(LockerSettings[] calldata lockers)
         internal
         view
-        returns (uint256[] memory formatted, uint256 slashingPercentages, uint256[] memory minAmounts)
+        returns (uint256[] memory formatted, uint256 slashingPercentages)
     {
         _validateLockers(lockers);
         uint256 len = lockers.length;
@@ -50,7 +49,6 @@ abstract contract ServiceManager is StakerManager {
         for (uint256 i; i < len; ++i) {
             formatted[i] = lockers[i].lockerId;
             slashingPercentages.set(lockers[i].maxSlashPercentage, i);
-            minAmounts[i] = lockers[i].minAmount;
         }
     }
 
@@ -66,12 +64,9 @@ abstract contract ServiceManager is StakerManager {
         require(lastId <= _lockerStorage.counter, "Invalid locker");
     }
 
-    function _kickOut(address staker, uint256 lockerIndex, uint256 serviceId) internal {
-        Service memory service = _services.data[serviceId];
-        ILocker lockerInstance = ILocker(locker(service.lockers[lockerIndex]));
-
-        // balance has to be smaller than minAmount
-        require(service.minAmounts[lockerIndex] > lockerInstance.balanceOf(staker), "StakingHub: kickout criteria not met");
+    function _kickOut(address staker, uint256 serviceId) internal {
+        // TODO when being kicked out for balance falling under threshold due to withdrawing,
+        // I circumvented the locking mechanism and should be penalised
 
         _unsubscribe(staker, serviceId, true);
     }

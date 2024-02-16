@@ -42,8 +42,11 @@ contract ERC20Locker is LockerBase {
             _serviceSupplies[services[i]] += amount;
         }
         underlying.transferFrom(msg.sender, address(this), amount);
+        emit BalanceChanged(msg.sender, _balances[msg.sender]);
     }
 
+    /// @notice amount is immediately subtracted, so that stakers cannot use it in subscriptions anymore
+    /// @notice amount can still be slashed during the withdrawal delay though (_slashPendingWithdrawal)
     function initiateWithdrawal(uint256 amount) external {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
         require(amount <= _balances[msg.sender], "Insufficient balance");
@@ -55,13 +58,14 @@ contract ERC20Locker is LockerBase {
         for (uint256 i; i < len; ++i) {
             _serviceSupplies[services[i]] -= amount;
         }
+        emit BalanceChanged(msg.sender, _balances[msg.sender]);
     }
 
+    /// @notice amount is transferred to staker (if not slashed in the meantime)
+    /// @notice no _balances adjustment is made, as already subtracted in initiateWithdrawal
     function finalizeWithdrawal() external returns (uint256 amount) {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
         amount = _finalizeWithdrawal(msg.sender);
-        _balances[msg.sender] -= amount;
-        _globalTotalSupply -= amount;
         underlying.transfer(msg.sender, amount);
     }
 
@@ -77,6 +81,7 @@ contract ERC20Locker is LockerBase {
             }
         }
         underlying.transfer(_burnAddress, amount);
+        emit BalanceChanged(msg.sender, _balances[msg.sender]);
     }
 
     function _balanceOf(address staker) internal view virtual override returns (uint256 balance) {

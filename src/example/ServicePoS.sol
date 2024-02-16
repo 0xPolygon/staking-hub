@@ -44,9 +44,9 @@ contract ServicePoS is IService, Ownable {
         slasher.slash(staker, percentages);
     }
 
-    /// @notice callable by eyeryone, validity checked in Hub
-    function kickStaker(address staker, uint256 offendingLockerIndex) public {
-        stakingHub.kickOut(staker, offendingLockerIndex);
+    /// @notice services monitor
+    function kickStaker(address staker) public onlyOwner {
+        stakingHub.kickOut(staker);
     }
 
     // ========== TRIGGERS ==========

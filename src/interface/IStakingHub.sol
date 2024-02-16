@@ -4,7 +4,6 @@ pragma solidity 0.8.24;
 struct LockerSettings {
     uint256 lockerId;
     uint8 maxSlashPercentage;
-    uint256 minAmount;
 }
 
 interface IStakingHub {
