@@ -25,10 +25,7 @@ abstract contract ServiceManager is StakerManager {
 
     ServiceStorage internal _services;
 
-    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint40 unsubNotice)
-        internal
-        returns (uint256 id)
-    {
+    function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint40 unsubNotice) internal returns (uint256 id) {
         require(service.code.length != 0, "Service contract not found");
         require(_services.ids[service] == 0, "Service already registered");
         require(unsubNotice > 0, "Invalid unsubscription notice");
@@ -38,11 +35,7 @@ abstract contract ServiceManager is StakerManager {
         emit ServiceRegistered(service, id);
     }
 
-    function _formatLockers(LockerSettings[] calldata lockers)
-        internal
-        view
-        returns (uint256[] memory formatted, uint256 slashingPercentages)
-    {
+    function _formatLockers(LockerSettings[] calldata lockers) internal view returns (uint256[] memory formatted, uint256 slashingPercentages) {
         _validateLockers(lockers);
         uint256 len = lockers.length;
         formatted = new uint256[](len);

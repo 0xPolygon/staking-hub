@@ -6,10 +6,9 @@ pragma solidity 0.8.24;
 /// @notice A locker holds and manages stakers' funds.
 /// @notice A staker deposits funds into the locker before subscribing to services that uses that locker.
 interface ILocker {
-
     /// @dev emitted whenever the stake of a staker changes
     /// this can one of 3 things:
-    /// - deposit into the locker 
+    /// - deposit into the locker
     /// - withdrawal from the locker
     /// - slashing
     /// @notice this event is extremely important, as Services need to monitor balance changes
