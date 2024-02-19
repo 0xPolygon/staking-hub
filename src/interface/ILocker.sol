@@ -1,26 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/// @title ILocker
+/// @title Locker
 /// @author Polygon Labs
-/// @notice A locker holds and manages stakers' funds.
-/// @notice A staker deposits funds into the locker before subscribing to services that uses that locker.
 interface ILocker {
     /// @dev emitted whenever the stake of a staker changes
     /// this can one of 3 things:
     /// - deposit into the locker
-    /// - withdrawal from the locker
+    /// - initiate withdrawal from the locker
     /// - slashing
     /// @notice this event is extremely important, as Services need to monitor balance changes
     /// i.e. in order to take action when stakers fall below minumum staking requirements.
-    /// Services can then decide wether they want to kick-out, slash the staker or both.
+    /// Services can then decide wether they want to terminate, slash the staker or both.
     /// This has been moved off-chain because:
     /// 1. It would be very costly to ping all services a staker is subscribed to each time a staker's balance changes
-    /// 2. A service's logic might change often or become too complex
-    event BalanceChanged(address staker, uint256 newAmount);
-
-    /// @dev emitted when a withdrawal is finalized
-    event WithdrawalFinalized(address staker, uint256 amount);
+    /// 2. A service's logic may be malicious
+    event BalanceChanged(address staker, uint256 newBalance);
 
     /// @dev Called by the Staking Hub when a staker is subscribing to a service that uses the locker.
     function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external;

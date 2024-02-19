@@ -8,6 +8,8 @@ import {PackedUints} from "./lib/PackedUints.sol";
 contract StakingHub is SlashingManager {
     using PackedUints for uint256;
 
+    uint256 constant SERVICE_UNSUB_GAS = 500_000;
+
     function registerLocker() external returns (uint256 id) {
         return _setLocker(msg.sender);
     }
@@ -35,14 +37,14 @@ contract StakingHub is SlashingManager {
     }
 
     function initiateUnsubscribe(uint256 service) external notFrozen returns (uint40 unsubscribableFrom) {
-        unsubscribableFrom = _cancelSubscription(msg.sender, service);
+        unsubscribableFrom = _initiateUnsubscription(msg.sender, service);
 
         if (_isLockedIn(msg.sender, service)) {
             _service(service).onInitiateUnsubscribe(msg.sender);
         } else {
-            try _service(service).onInitiateUnsubscribe(msg.sender) {}
+            try _service(service).onInitiateUnsubscribe{gas: SERVICE_UNSUB_GAS}(msg.sender) {}
             catch (bytes memory revertData) {
-                emit InitiatedUnsubscribeWarning(service, msg.sender, revertData);
+                emit UnsubscriptionInitializationWarning(service, msg.sender, revertData);
             }
         }
     }
@@ -50,7 +52,7 @@ contract StakingHub is SlashingManager {
     function finalizeUnsubscribe(uint256 service) external notFrozen {
         _unsubscribe(msg.sender, service, false);
 
-        _notifyServiceAndLockers(msg.sender, service);
+        _notifyServiceOnUnsub(msg.sender, service);
     }
 
     function terminate(address staker) external {
@@ -58,23 +60,24 @@ contract StakingHub is SlashingManager {
 
         _unsubscribe(staker, service, true);
 
-        _notifyServiceAndLockers(staker, service);
+        _notifyLockersOnUnsub(staker, service);
     }
 
-    function _notifyServiceAndLockers(address staker, uint256 service) private {
+    function _notifyServiceOnUnsub(address staker, uint256 service) private {
         if (_isLockedIn(staker, service)) {
             _service(service).onFinalizeUnsubscribe(staker);
         } else {
-            try _service(service).onFinalizeUnsubscribe(staker) {}
+            try _service(service).onFinalizeUnsubscribe{gas: SERVICE_UNSUB_GAS}(staker) {}
             catch (bytes memory revertData) {
-                emit FinalizedUnsubscribeWarning(service, staker, revertData);
+                emit UnsubscriptionFinalizationWarning(service, staker, revertData);
             }
         }
+    }
 
+    function _notifyLockersOnUnsub(address staker, uint256 service) private {
         uint256[] memory lockers = _lockers(service);
         uint256 len = lockers.length;
 
-        // Note: A service needs to trust the lockers not to revert on the call
         for (uint256 i; i < len; ++i) {
             locker(lockers[i]).onUnsubscribe(staker, service, _slashingPercentages(service).get(i));
         }

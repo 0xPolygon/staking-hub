@@ -5,7 +5,7 @@ import {ILocker} from "../interface/ILocker.sol";
 import {StakingHub} from "../StakingHub.sol";
 import {ServiceTracker, ServiceStorage} from "../lib/ServiceTracker.sol";
 
-abstract contract LockerBase is ILocker {
+abstract contract ERC20Locker is ILocker {
     using ServiceTracker for ServiceStorage;
 
     uint256 internal constant STAKER_WITHDRAWAL_DELAY = 7 days;

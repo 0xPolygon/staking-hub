@@ -2,12 +2,12 @@
 pragma solidity 0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {LockerBase} from "../template/LockerBase.sol";
+import {ERC20Locker} from "../template/ERC20Locker.sol";
 
-/// @title ERC20Locker
+/// @title ERC20LockerExample
 /// @author Polygon Labs
 /// @notice An ERC20-compatible abstract template contract inheriting from BaseLocker
-contract ERC20Locker is LockerBase {
+contract ERC20LockerExample is ERC20Locker {
     IERC20 internal immutable underlying;
     address internal immutable _burnAddress;
 
@@ -15,7 +15,7 @@ contract ERC20Locker is LockerBase {
     uint256 internal _globalTotalSupply;
     mapping(uint256 serviceId => uint256 supply) internal _serviceSupplies;
 
-    constructor(address _underlying, address stakingHub, address burnAddress) LockerBase(stakingHub) {
+    constructor(address _underlying, address stakingHub, address burnAddress) ERC20Locker(stakingHub) {
         underlying = IERC20(_underlying);
         _burnAddress = burnAddress;
     }
@@ -76,8 +76,6 @@ contract ERC20Locker is LockerBase {
 
         amount = _finalizeWithdrawal(msg.sender);
         underlying.transfer(msg.sender, amount);
-
-        emit WithdrawalFinalized(msg.sender, amount);
     }
 
     function _onSlash(address staker, uint256, uint256 amount) internal virtual override {

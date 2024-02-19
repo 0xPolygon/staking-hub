@@ -118,12 +118,11 @@ abstract contract SlashingManager is ServiceManager {
 
             // The cumulative of all for this period (can not exceed the max)
             currentSlashingPercentages.set(currentPercentage + percentage, i);
-            uint256 newBalance = locker(locker_).onSlash(staker, service, percentage, freezeStart);
-
-            emit StakerSlashed(staker, service, locker_, percentage, newBalance);
+            locker(locker_).onSlash(staker, service, percentage, freezeStart);
         }
 
         serviceData.slashedPercentages = currentSlashingPercentages;
+        emit StakerSlashed(staker, service, _lockers(service), percentages);
     }
 
     function _isFrozen(address staker) internal view returns (bool) {
