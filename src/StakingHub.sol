@@ -53,6 +53,7 @@ contract StakingHub is SlashingManager {
         _unsubscribe(msg.sender, service, false);
 
         _notifyServiceOnUnsub(msg.sender, service);
+        _notifyLockersOnUnsub(msg.sender, service);
     }
 
     function terminate(address staker) external {
