@@ -1,62 +1,118 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/// @title Locker
-/// @author Polygon Labs
+/**
+ * @title Locker
+ * @author Polygon Labs
+ * @notice
+ * Plese see PRC-X for more details.
+ */
 interface ILocker {
-    /// @dev emitted whenever the stake of a staker changes
-    /// this can one of 3 things:
-    /// - deposit into the locker
-    /// - initiate withdrawal from the locker
-    /// - slashing
-    /// @notice this event is extremely important, as Services need to monitor balance changes
-    /// i.e. in order to take action when stakers fall below minumum staking requirements.
-    /// Services can then decide wether they want to terminate, slash the staker or both.
-    /// This has been moved off-chain because:
-    /// 1. It would be very costly to ping all services a staker is subscribed to each time a staker's balance changes
-    /// 2. A service's logic may be malicious
+    /**
+     * @notice
+     * Indicates change in balance. Monitored by services offchain.
+     * @dev
+     * Must be logged on balance change (depositing, initiating withdrawal, slashing, etc.).
+     * @param staker Staker.
+     * @param newBalance New balance.
+     */
     event BalanceChanged(address staker, uint256 newBalance);
 
-    /// @dev Called by the Staking Hub when a staker is subscribing to a service that uses the locker.
+    /**
+     * @dev
+     * Should be logged on withdrawal.
+     * @param staker Staker.
+     * @param amount Amount.
+     */
+    event Withdrawn(address staker, uint256 amount);
+
+    /**
+     * @notice
+     * Does internal accounting. Should perform risk managment.
+     * @dev
+     * Triggered by hub.
+     * @param staker Staker.
+     * @param service Service.
+     * @param maxSlashPercentage Max slash percentage. Used for managing risk.
+     */
     function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external;
 
-    /// @dev Called by the Staking Hub when a staker has unsubscribed from a service that uses the locker.
+    /**
+     * @notice
+     * Does internal accounting. Should perform risk managment.
+     * @dev
+     * Triggered by hub.
+     * @param staker Staker.
+     * @param service Service.
+     * @param maxSlashPercentage Max slash percentage. Used for managing risk.
+     */
     function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external;
 
-    /// @dev Called by the Staking Hub when a staker is slashed
-    /// @dev burns funds immediately
-    /// @dev Uses freezeStart to snapshot balance if not already snapshotted for that freezeStart.
-    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external returns (uint256 newBalance);
+    /**
+     * @notice
+     * Must burn slashed funds. Must aggregates slashings by applying percentage to balance at start of freeze period. Must burn funds scheduled for withdrawal first.
+     * @dev
+     * Triggered by hub.
+     * Logs `BalanceChanged`.
+     * @param staker Staker.
+     * @param service Service.
+     * @param percentage Percentage.
+     * @param freezeStart Freeze period ID. Used to snapshot balance once at start of freeze period for slashing aggregation.
+     */
+    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external;
 
-    /// @return locker id used to identify the locker in the hub
+    /**
+     * @return Locker ID.
+     */
     function id() external view returns (uint256);
 
-    /// @return amount underlying balance of deposited stake
+    /**
+     * @return amount Underlying funds of staker.
+     */
     function balanceOf(address staker) external view returns (uint256 amount);
 
-    /// @return amount underlying balance restaked to a specific service
+    /**
+     * @return amount Underlying funds of staker, restaked in service.
+     */
     function balanceOf(address staker, uint256 service) external view returns (uint256 amount);
 
-    /// @return votingPower representation of voting power of the staker
+    /**
+     * @return votingPower Representation of voting power of staker.
+     */
     function votingPowerOf(address staker) external view returns (uint256 votingPower);
 
-    /// @return votingPower representation of voting power of the staker for a specific service
+    /**
+     * @return votingPower Representation of voting power of staker in service.
+     */
     function votingPowerOf(address staker, uint256 service) external view returns (uint256 votingPower);
 
-    /// @return totalSupply total supply of underlying asset deposited into locker
+    /**
+     * @return Underlying funds of all stakers.
+     */
     function totalSupply() external view returns (uint256);
 
-    /// @return totalSupply total supply of underlying asset subscribed to a specific service
+    /**
+     * @return Underlying funds of all stakers restaked in service.
+     */
     function totalSupply(uint256 service) external view returns (uint256);
 
-    /// @return totalVotingPower total voting power of all stakers
+    /**
+     * @return Representation of voting power of all stakers.
+     */
     function totalVotingPower() external view returns (uint256);
 
-    /// @return totalVotingPower total voting power of all stakers subscribed to a specific service
+    /**
+     * @return Representation of voting power of all stakers in service.
+     */
     function totalVotingPower(uint256 service) external view returns (uint256);
 
-    /// @return all services subscribed to by this staker that utilise the locker
+    /**
+     * @return Services staker is subscribed to that use locker.
+     */
     function getServices(address staker) external view returns (uint256[] memory);
 
+    /**
+     * @return Whether staker is subscribed to service.
+     */
     function isSubscribed(address staker, uint256 service) external view returns (bool);
 }
