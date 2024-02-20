@@ -50,7 +50,7 @@ abstract contract SlashingManager is ServiceManager {
         Slasher storage slasher = _slashers.slashers[service];
         require(slasher.slasher != newSlasher, "Same slasher");
         require(slasher.scheduledTime == 0, "Slasher update already initiated");
-        scheduledTime = uint40(block.timestamp + SLASHER_UPDATE_TIMELOCK);
+        scheduledTime = uint40(block.timestamp + SLASHER_UPDATE_TIMELOCK + _unsubNotice(service));
         slasher.newSlasher = newSlasher;
         slasher.scheduledTime = scheduledTime;
         emit SlasherUpdateInitiated(service, newSlasher);
@@ -68,6 +68,10 @@ abstract contract SlashingManager is ServiceManager {
         _slashers.slashers[service] = Slasher(newSlasher, address(0), 0);
         _slashers.services[newSlasher] = service;
         emit SlasherUpdated(service, newSlasher);
+    }
+
+    function _slasherUpdateScheduled(uint256 service) internal view returns (bool) {
+        return _slashers.slashers[service].newSlasher == address(0);
     }
 
     function _freeze(address staker, address slasher) internal {

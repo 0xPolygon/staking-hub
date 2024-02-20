@@ -33,13 +33,13 @@ contract StakingHub is SlashingManager {
         for (uint256 i; i < len; ++i) {
             locker(lockers[i]).onSubscribe(msg.sender, service, slashingPercentages.get(i));
         }
-        _service(service).onSubscribe(msg.sender);
+        _service(service).onSubscribe(msg.sender, lockInUntil);
     }
 
     function initiateUnsubscribe(uint256 service) external notFrozen returns (uint40 unsubscribableFrom) {
         unsubscribableFrom = _initiateUnsubscription(msg.sender, service);
 
-        if (_isLockedIn(msg.sender, service)) {
+        if (_isLockedIn(msg.sender, service) && !_slasherUpdateScheduled(service)) {
             _service(service).onInitiateUnsubscribe(msg.sender);
         } else {
             try _service(service).onInitiateUnsubscribe{gas: SERVICE_UNSUB_GAS}(msg.sender) {}
@@ -64,26 +64,6 @@ contract StakingHub is SlashingManager {
         _notifyLockersOnUnsub(staker, service);
     }
 
-    function _notifyServiceOnUnsub(address staker, uint256 service) private {
-        if (_isLockedIn(staker, service)) {
-            _service(service).onFinalizeUnsubscribe(staker);
-        } else {
-            try _service(service).onFinalizeUnsubscribe{gas: SERVICE_UNSUB_GAS}(staker) {}
-            catch (bytes memory revertData) {
-                emit UnsubscriptionFinalizationWarning(service, staker, revertData);
-            }
-        }
-    }
-
-    function _notifyLockersOnUnsub(address staker, uint256 service) private {
-        uint256[] memory lockers = _lockers(service);
-        uint256 len = lockers.length;
-
-        for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onUnsubscribe(staker, service, _slashingPercentages(service).get(i));
-        }
-    }
-
     function initiateSlasherUpdate(address newSlasher) external returns (uint40 scheduledTime) {
         scheduledTime = _initiateSlasherUpdate(_serviceId(msg.sender), newSlasher);
     }
@@ -102,5 +82,21 @@ contract StakingHub is SlashingManager {
 
     function isFrozen(address staker) external view returns (bool) {
         return _isFrozen(staker);
+    }
+
+    function _notifyServiceOnUnsub(address staker, uint256 service) private {
+        try _service(service).onFinalizeUnsubscribe{gas: SERVICE_UNSUB_GAS}(staker) {}
+        catch (bytes memory revertData) {
+            emit UnsubscriptionFinalizationWarning(service, staker, revertData);
+        }
+    }
+
+    function _notifyLockersOnUnsub(address staker, uint256 service) private {
+        uint256[] memory lockers = _lockers(service);
+        uint256 len = lockers.length;
+
+        for (uint256 i; i < len; ++i) {
+            locker(lockers[i]).onUnsubscribe(staker, service, _slashingPercentages(service).get(i));
+        }
     }
 }

@@ -76,6 +76,8 @@ contract ERC20LockerExample is ERC20Locker {
 
         amount = _finalizeWithdrawal(msg.sender);
         underlying.transfer(msg.sender, amount);
+
+        emit Withdrawn(msg.sender, amount);
     }
 
     function _onSlash(address staker, uint256, uint256 amount) internal virtual override {
