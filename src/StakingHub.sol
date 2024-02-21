@@ -48,13 +48,14 @@ contract StakingHub is SlashingManager {
                 emit UnsubscriptionInitializationWarning(msg.sender, service, revertData);
             }
         }
+
+        _notifyLockersOnUnsub(msg.sender, service);
     }
 
     function finalizeUnsubscribe(uint256 service) external notFrozen {
         _unsubscribe(msg.sender, service, false);
 
         _notifyServiceOnUnsub(msg.sender, service);
-        _notifyLockersOnUnsub(msg.sender, service);
     }
 
     function terminate(address staker) external {
