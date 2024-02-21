@@ -10,7 +10,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /// @title ServicePoS
 /// @author Polygon Labs
 /// @notice Represents the Polygon PoS network
-/// @notice Stakers can subscribe to this Service using the Staking-Layer.
+/// @notice Stakers can subscribe to this Service using the Staking Hub.
 contract ServicePoS is IService, Ownable {
     StakingHub immutable stakingHub;
     ISlasher immutable slasher;

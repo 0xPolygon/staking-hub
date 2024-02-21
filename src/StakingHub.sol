@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.24;
 
-import {SlashingManager} from "./staking-layer/SlashingManager.sol";
+import {SlashingManager} from "./staking-hub/SlashingManager.sol";
 import {LockerSettings} from "./interface/IStakingHub.sol";
 import {PackedUints} from "./lib/PackedUints.sol";
 
