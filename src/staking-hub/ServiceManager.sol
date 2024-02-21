@@ -32,7 +32,7 @@ abstract contract ServiceManager is StakerManager {
         id = ++_services.counter;
         _services.ids[service] = id;
         _services.data[id] = Service(service, lockers, slashingPercentages, unsubNotice);
-        emit ServiceRegistered(service, id);
+        emit ServiceRegistered(service, id, lockers, slashingPercentages, unsubNotice);
     }
 
     function _formatLockers(LockerSettings[] calldata lockers) internal view returns (uint256[] memory formatted, uint256 slashingPercentages) {

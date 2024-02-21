@@ -44,7 +44,7 @@ contract StakingHub is SlashingManager {
         } else {
             try _service(service).onInitiateUnsubscribe{gas: SERVICE_UNSUB_GAS}(msg.sender) {}
             catch (bytes memory revertData) {
-                emit UnsubscriptionInitializationWarning(service, msg.sender, revertData);
+                emit UnsubscriptionInitializationWarning(msg.sender, service, revertData);
             }
         }
     }
@@ -87,7 +87,7 @@ contract StakingHub is SlashingManager {
     function _notifyServiceOnUnsub(address staker, uint256 service) private {
         try _service(service).onFinalizeUnsubscribe{gas: SERVICE_UNSUB_GAS}(staker) {}
         catch (bytes memory revertData) {
-            emit UnsubscriptionFinalizationWarning(service, staker, revertData);
+            emit UnsubscriptionFinalizationWarning(staker, service, revertData);
         }
     }
 

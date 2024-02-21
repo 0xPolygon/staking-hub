@@ -53,7 +53,7 @@ abstract contract SlashingManager is ServiceManager {
         scheduledTime = uint40(block.timestamp + SLASHER_UPDATE_TIMELOCK + _unsubNotice(service));
         slasher.newSlasher = newSlasher;
         slasher.scheduledTime = scheduledTime;
-        emit SlasherUpdateInitiated(service, newSlasher);
+        emit SlasherUpdateInitiated(service, newSlasher, scheduledTime);
     }
 
     function _finalizeSlasherUpdate(uint256 service) internal {

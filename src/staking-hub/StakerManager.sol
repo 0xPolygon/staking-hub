@@ -37,7 +37,7 @@ abstract contract StakerManager is LockerManager {
         require(sub.unsubscribableFrom == 0, "Unsubscription already initiated");
         unsubscribableFrom = uint40(block.timestamp + _unsubNotice(service));
         sub.unsubscribableFrom = unsubscribableFrom;
-        emit UnsubscriptionInitiated(staker, service);
+        emit UnsubscriptionInitiated(staker, service, unsubscribableFrom);
     }
 
     function _unsubscribe(address staker, uint256 service, bool force) internal {
