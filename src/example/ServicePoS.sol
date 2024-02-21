@@ -54,7 +54,7 @@ contract ServicePoS is IService, Ownable {
         // i.e. check that staker has sufficient funds in all required lockers
     }
 
-    function onInitiateUnsubscribe(address staker) public {}
+    function onInitiateUnsubscribe(address staker, bool) public {}
 
     function onFinalizeUnsubscribe(address staker) public {}
 }

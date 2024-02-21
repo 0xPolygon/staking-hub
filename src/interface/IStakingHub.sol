@@ -8,7 +8,7 @@ struct LockerSettings {
 
 /// @title Staking Hub
 /// @author Polygon Labs
-/// @notice Please see PRC-X for more details.
+/// @notice The Staking Hub is the central contract of the Polygon Staking Layer and is responsible for managing and coordinating stakers, lockers and services.
 interface IStakingHub {
     /// @notice Emitted when a new locker is registered with the staking hub.
     /// @param locker The address of the locker.

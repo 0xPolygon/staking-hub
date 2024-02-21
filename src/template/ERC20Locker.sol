@@ -129,7 +129,7 @@ abstract contract ERC20Locker is ILocker {
         return _id;
     }
 
-    function getServices(address staker) public view returns (uint256[] memory) {
+    function services(address staker) public view returns (uint256[] memory) {
         return _serviceStorage.getServices(staker);
     }
 

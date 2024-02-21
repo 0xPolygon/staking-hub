@@ -38,7 +38,7 @@ contract ERC20LockerExample is ERC20Locker {
         _balances[user] += amount;
         _globalTotalSupply += amount;
 
-        uint256[] memory services = getServices(user);
+        uint256[] memory services = services(user);
         uint256 len = services.length;
         for (uint256 i; i < len; ++i) {
             _serviceSupplies[services[i]] += amount;
@@ -60,7 +60,7 @@ contract ERC20LockerExample is ERC20Locker {
         _balances[msg.sender] -= amount;
         _globalTotalSupply -= amount;
 
-        uint256[] memory services = getServices(msg.sender);
+        uint256[] memory services = services(msg.sender);
         uint256 len = services.length;
         for (uint256 i; i < len; ++i) {
             _serviceSupplies[services[i]] -= amount;
@@ -87,7 +87,7 @@ contract ERC20LockerExample is ERC20Locker {
             _balances[msg.sender] -= remainder;
             _globalTotalSupply -= remainder;
 
-            uint256[] memory services = getServices(msg.sender);
+            uint256[] memory services = services(msg.sender);
             uint256 len = services.length;
             for (uint256 i; i < len; ++i) {
                 _serviceSupplies[services[i]] -= remainder;
