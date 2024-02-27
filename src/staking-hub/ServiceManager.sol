@@ -86,4 +86,8 @@ abstract contract ServiceManager is StakerManager {
     function _isSubscribed(address staker, uint256 id) internal view returns (bool) {
         return _stakers.subscriptions[staker][id].subscribed;
     }
+
+    function serviceId(address serviceAddr) external view returns (uint256 id) {
+        id = _serviceId(serviceAddr);
+    }
 }
