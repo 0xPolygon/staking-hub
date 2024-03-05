@@ -13,7 +13,7 @@ contract ERC20LockerExample is ERC20Locker {
 
     mapping(address staker => uint256 balance) internal _balances;
     uint256 internal _globalTotalSupply;
-    mapping(uint256 serviceId => uint256 supply) internal _serviceSupplies;
+    mapping(uint256 serviceId => uint256 supply) internal _totalStakes;
 
     constructor(address _underlying, address stakingHub, address burnAddress) ERC20Locker(stakingHub) {
         underlying = IERC20(_underlying);
@@ -38,10 +38,11 @@ contract ERC20LockerExample is ERC20Locker {
         _balances[user] += amount;
         _globalTotalSupply += amount;
 
-        uint256[] memory services = services(user);
-        uint256 len = services.length;
+        uint256[] memory services_ = services(user);
+        uint256 len = services_.length;
+        uint256 balance = _balances[msg.sender];
         for (uint256 i; i < len; ++i) {
-            _serviceSupplies[services[i]] += amount;
+            _totalStakes[services_[i]] += _calcStakeIncrease(balance, _allowances[user][services_[i]].allowance, amount);
         }
 
         underlying.transferFrom(msg.sender, address(this), amount);
@@ -53,20 +54,36 @@ contract ERC20LockerExample is ERC20Locker {
     /// @notice amount can still be slashed during the withdrawal delay though (_slashPendingWithdrawal)
     function initiateWithdrawal(uint256 amount) external {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
-        require(amount <= _balances[msg.sender], "Insufficient balance");
+        (bool lockedIn, uint256 unstakedBalance) = _reviewSubscriptions(msg.sender);
+        if (lockedIn) {
+            require(amount <= unstakedBalance, "Amount exceeds unstaked balance");
+        }
 
         _registerWithdrawal(msg.sender, amount);
 
         _balances[msg.sender] -= amount;
         _globalTotalSupply -= amount;
 
-        uint256[] memory services = services(msg.sender);
-        uint256 len = services.length;
+        uint256[] memory services_ = services(msg.sender);
+        uint256 len = services_.length;
+        uint256 balance = _balances[msg.sender];
         for (uint256 i; i < len; ++i) {
-            _serviceSupplies[services[i]] -= amount;
+            _totalStakes[services_[i]] -= _calcStakeDecrease(balance, _allowances[msg.sender][services_[i]].allowance, amount);
         }
 
         emit BalanceChanged(msg.sender, _balances[msg.sender]);
+    }
+
+    function _reviewSubscriptions(address staker) internal view returns (bool lockedIn, uint256 unstakedBalance) {
+        // iterate over each subscription and check if locked in on any, and what the balanceOf(staker) - max stakeOf(staker) is.
+        uint256 maxStake;
+        (uint256[] memory subs, uint256[] memory lockIns) = _getServicesAndLockIns(staker);
+        for (uint256 i; i < subs.length; ++i) {
+            if (block.timestamp < lockIns[i]) lockedIn = true;
+            uint256 stake = stakeOf(staker, subs[i]);
+            if (stake > maxStake) maxStake = stake;
+        }
+        unstakedBalance = _balances[staker] - maxStake;
     }
 
     /// @notice amount is transferred to staker (if not slashed in the meantime)
@@ -80,6 +97,16 @@ contract ERC20LockerExample is ERC20Locker {
         emit Withdrawn(msg.sender, amount);
     }
 
+    function registerApproval(uint256 service, uint256 amount) internal {
+        require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
+        _registerApproval(msg.sender, service, amount);
+    }
+
+    function finalizeApproval(uint256 service) internal {
+        require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
+        _finalizeApproval(msg.sender, service);
+    }
+
     function _onSlash(address staker, uint256, uint256 amount) internal virtual override {
         uint256 remainder = _slashPendingWithdrawal(staker, amount);
 
@@ -87,10 +114,11 @@ contract ERC20LockerExample is ERC20Locker {
             _balances[msg.sender] -= remainder;
             _globalTotalSupply -= remainder;
 
-            uint256[] memory services = services(msg.sender);
-            uint256 len = services.length;
+            uint256[] memory services_ = services(msg.sender);
+            uint256 len = services_.length;
+            uint256 balance = _balances[msg.sender];
             for (uint256 i; i < len; ++i) {
-                _serviceSupplies[services[i]] -= remainder;
+                _totalStakes[services_[i]] -= _calcStakeDecrease(balance, _allowances[msg.sender][services_[i]].allowance, remainder);
             }
         }
         underlying.transfer(_burnAddress, amount);
@@ -111,7 +139,7 @@ contract ERC20LockerExample is ERC20Locker {
     }
 
     function _totalSupply(uint256 serviceId) internal view virtual override returns (uint256 totalSupply) {
-        return _serviceSupplies[serviceId];
+        return _totalStakes[serviceId];
     }
 
     function _votingPowerOf(address staker) internal view virtual override returns (uint256 votingPower) {
@@ -127,6 +155,17 @@ contract ERC20LockerExample is ERC20Locker {
     }
 
     function _totalVotingPower(uint256 service) internal view virtual override returns (uint256 totalVotingPower) {
-        return _serviceSupplies[service];
+        return _totalStakes[service];
+    }
+
+    function _calcStakeIncrease(uint256 balance, uint256 allowance_, uint256 amount) internal pure returns (uint256 amountToAdd) {
+        if (balance >= allowance_) return 0;
+        uint256 newBalance = balance + amount;
+        amountToAdd = newBalance > allowance_ ? allowance_ - balance : amount;
+    }
+
+    function _calcStakeDecrease(uint256 balance, uint256 allowance, uint256 amount) internal pure returns (uint256 amountToSub) {
+        uint256 newBalance = balance - amount;
+        amountToSub = newBalance >= allowance ? 0 : allowance - newBalance;
     }
 }

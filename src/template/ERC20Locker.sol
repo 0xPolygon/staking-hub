@@ -66,9 +66,9 @@ abstract contract ERC20Locker is ILocker {
         }
     }
 
-    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint256 lockedInUntil) external {
         require(msg.sender == address(_stakingHub), "Unauthorized");
-        _serviceStorage.addService(staker, service);
+        _serviceStorage.addService(staker, service, lockedInUntil);
         _onSubscribe(staker, service, maxSlashPercentage);
     }
 
@@ -174,4 +174,55 @@ abstract contract ERC20Locker is ILocker {
     function _totalVotingPower() internal view virtual returns (uint256);
 
     function _totalVotingPower(uint256 service) internal view virtual returns (uint256);
+
+    // RESTAKING VIA APPROAVALS
+
+    struct Allowance {
+        uint256 allowance;
+        uint256 scheduledAllowance;
+        uint256 scheduledTime;
+    }
+
+    mapping(address staker => mapping(uint256 service => Allowance)) _allowances;
+
+    function _registerApproval(address staker, uint256 service, uint256 amount) internal {
+        Allowance memory allowanceData = _allowances[staker][service];
+        require(allowanceData.scheduledTime == 0, "Already registered");
+        require(allowanceData.allowance != amount, "No change");
+        bool decreasing = amount < allowanceData.allowance;
+        if (decreasing) {
+            require(amount < _allowances[staker][service].allowance, "Cannot decrease while locked-in");
+        }
+
+        _allowances[staker][service].scheduledAllowance = amount;
+        _allowances[staker][service].scheduledTime = block.timestamp + (decreasing ? STAKER_WITHDRAWAL_DELAY : 0);
+
+        // Note: Security consideration - The service should assume the staker will finalize the approval if the allowance is supposed to DECREASE.
+        // Note: Security consideration - The service should NOT assume the staker will finalize the approval if the allowance is supposed to INCREASE.
+        emit AllowanceChanged(staker, service, amount);
+    }
+
+    function _finalizeApproval(address staker, uint256 service) internal {
+        Allowance memory allowanceData = _allowances[staker][service];
+        require(allowanceData.scheduledTime != 0, "Not registered");
+
+        _allowances[staker][service].allowance = allowanceData.scheduledAllowance;
+        _allowances[staker][service].scheduledTime = 0;
+
+        emit Approved(staker, service, allowanceData.scheduledAllowance);
+    }
+
+    function allowance(address staker, uint256 service) external view returns (uint256 amount) {
+        return _allowances[staker][service].allowance;
+    }
+
+    function stakeOf(address staker, uint256 service) public view returns (uint256 stake) {
+        uint256 balance = _balanceOf(staker);
+        uint256 allowance_ = _allowances[staker][service].allowance;
+        return allowance_ <= balance ? allowance_ : balance;
+    }
+
+    function _getServicesAndLockIns(address staker) internal view returns (uint256[] memory services_, uint256[] memory lockIns) {
+        return _serviceStorage.getServicesAndLockIns(staker);
+    }
 }
