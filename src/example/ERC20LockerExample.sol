@@ -13,7 +13,7 @@ contract ERC20LockerExample is ERC20Locker {
 
     mapping(address staker => uint256 balance) internal _balances;
     uint256 internal _globalTotalSupply;
-    mapping(uint256 serviceId => uint256 supply) internal _totalStakes;
+    mapping(uint256 serviceId => uint256 stake) internal _totalStakes;
 
     constructor(address _underlying, address stakingHub, address burnAddress) ERC20Locker(stakingHub) {
         underlying = IERC20(_underlying);
@@ -42,7 +42,7 @@ contract ERC20LockerExample is ERC20Locker {
         uint256 len = services_.length;
         uint256 balance = _balances[msg.sender];
         for (uint256 i; i < len; ++i) {
-            _totalStakes[services_[i]] += _calcStakeIncrease(balance, _allowances[user][services_[i]].allowance, amount);
+            _totalStakes[services_[i]] += _calcStakeIncreaseForBalanceChange(balance, _allowances[user][services_[i]].allowance, amount);
         }
 
         underlying.transferFrom(msg.sender, address(this), amount);
@@ -68,7 +68,7 @@ contract ERC20LockerExample is ERC20Locker {
         uint256 len = services_.length;
         uint256 balance = _balances[msg.sender];
         for (uint256 i; i < len; ++i) {
-            _totalStakes[services_[i]] -= _calcStakeDecrease(balance, _allowances[msg.sender][services_[i]].allowance, amount);
+            _totalStakes[services_[i]] -= _calcStakeDecreaseForBalanceChange(balance, _allowances[msg.sender][services_[i]].allowance, amount);
         }
 
         emit BalanceChanged(msg.sender, _balances[msg.sender]);
@@ -99,7 +99,12 @@ contract ERC20LockerExample is ERC20Locker {
 
     function registerApproval(uint256 service, uint256 amount) internal {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
-        _registerApproval(msg.sender, service, amount);
+        bool decreasing = _registerApproval(msg.sender, service, amount);
+        if (decreasing) {
+            _totalStakes[service] -= _calcStakeDecreaseForAllowanceChange(_balances[msg.sender], _allowances[msg.sender][service].allowance, amount);
+        } else {
+            _totalStakes[service] += _calcStakeIncreaseForAllowanceChange(_balances[msg.sender], _allowances[msg.sender][service].allowance, amount);
+        }
     }
 
     function finalizeApproval(uint256 service) internal {
@@ -118,7 +123,7 @@ contract ERC20LockerExample is ERC20Locker {
             uint256 len = services_.length;
             uint256 balance = _balances[msg.sender];
             for (uint256 i; i < len; ++i) {
-                _totalStakes[services_[i]] -= _calcStakeDecrease(balance, _allowances[msg.sender][services_[i]].allowance, remainder);
+                _totalStakes[services_[i]] -= _calcStakeDecreaseForBalanceChange(balance, _allowances[msg.sender][services_[i]].allowance, remainder);
             }
         }
         underlying.transfer(_burnAddress, amount);
@@ -158,14 +163,22 @@ contract ERC20LockerExample is ERC20Locker {
         return _totalStakes[service];
     }
 
-    function _calcStakeIncrease(uint256 balance, uint256 allowance_, uint256 amount) internal pure returns (uint256 amountToAdd) {
+    function _calcStakeIncreaseForBalanceChange(uint256 balance, uint256 allowance_, uint256 amount) internal pure returns (uint256 amountToAdd) {
         if (balance >= allowance_) return 0;
         uint256 newBalance = balance + amount;
         amountToAdd = newBalance > allowance_ ? allowance_ - balance : amount;
     }
 
-    function _calcStakeDecrease(uint256 balance, uint256 allowance, uint256 amount) internal pure returns (uint256 amountToSub) {
+    function _calcStakeDecreaseForBalanceChange(uint256 balance, uint256 allowance_, uint256 amount) internal pure returns (uint256 amountToSub) {
         uint256 newBalance = balance - amount;
-        amountToSub = newBalance >= allowance ? 0 : allowance - newBalance;
+        amountToSub = newBalance >= allowance_ ? 0 : allowance_ - newBalance;
+    }
+
+    function _calcStakeIncreaseForAllowanceChange(uint256 balance, uint256 allowance_, uint256 amount) internal pure returns (uint256 amountToAdd) {
+        return _calcStakeIncreaseForBalanceChange(allowance_, balance, amount);
+    }
+
+    function _calcStakeDecreaseForAllowanceChange(uint256 balance, uint256 allowance_, uint256 amount) internal pure returns (uint256 amountToSub) {
+        return _calcStakeDecreaseForBalanceChange(allowance_, balance, amount);
     }
 }

@@ -185,11 +185,11 @@ abstract contract ERC20Locker is ILocker {
 
     mapping(address staker => mapping(uint256 service => Allowance)) _allowances;
 
-    function _registerApproval(address staker, uint256 service, uint256 amount) internal {
+    function _registerApproval(address staker, uint256 service, uint256 amount) internal returns (bool decreasing) {
         Allowance memory allowanceData = _allowances[staker][service];
         require(allowanceData.scheduledTime == 0, "Already registered");
         require(allowanceData.allowance != amount, "No change");
-        bool decreasing = amount < allowanceData.allowance;
+        decreasing = amount < allowanceData.allowance;
         if (decreasing) {
             require(amount < _allowances[staker][service].allowance, "Cannot decrease while locked-in");
         }
