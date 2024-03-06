@@ -47,7 +47,7 @@ contract ERC20LockerExample is ERC20Locker {
 
         underlying.transferFrom(msg.sender, address(this), amount);
 
-        emit BalanceChanged(msg.sender, _balances[msg.sender]);
+        emit BalanceChanged(msg.sender, balance);
     }
 
     function _onSubscribe(address staker, uint256 service, uint8) internal virtual override {
@@ -79,16 +79,17 @@ contract ERC20LockerExample is ERC20Locker {
             _totalStakes[services_[i]] -= _calcStakeDecreaseForBalanceChange(balance, _allowances[msg.sender][services_[i]].allowance, amount);
         }
 
-        emit BalanceChanged(msg.sender, _balances[msg.sender]);
+        emit BalanceChanged(msg.sender, balance);
     }
 
     function _reviewSubscriptions(address staker) internal view returns (bool lockedIn, uint256 unstakedBalance) {
-        // iterate over each subscription and check if locked in on any, and what the balanceOf(staker) - max stakeOf(staker) is.
         uint256 maxStake;
         (uint256[] memory subs, uint256[] memory lockIns) = _getServicesAndLockIns(staker);
         for (uint256 i; i < subs.length; ++i) {
             if (block.timestamp < lockIns[i]) lockedIn = true;
-            uint256 stake = stakeOf(staker, subs[i]);
+            uint256 balance = _balanceOf(staker);
+            uint256 allowance_ = _allowances[staker][subs[i]].allowance;
+            uint256 stake = _getLower(allowance_, balance);
             if (stake > maxStake) maxStake = stake;
         }
         unstakedBalance = _balances[staker] - maxStake;
@@ -105,19 +106,19 @@ contract ERC20LockerExample is ERC20Locker {
         emit Withdrawn(msg.sender, amount);
     }
 
-    function registerApproval(uint256 service, uint256 amount) internal {
+    function registerApproval(uint256 service, uint256 newAllowance) internal returns (bool finalized) {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
-        _registerApproval(msg.sender, service, amount);
+        finalized = _registerApproval(msg.sender, service, newAllowance);
+        uint256 allowance_ = _allowances[msg.sender][service].allowance;
+        uint256 amount = allowance_ > newAllowance ? allowance_ - newAllowance : newAllowance - allowance_;
+        // If it finalized, it means the allowance was increased.
+        if (finalized) _totalStakes[service] += _calcStakeIncreaseForAllowanceChange(_balances[msg.sender], allowance_, amount);
+        else _totalStakes[service] -= _calcStakeDecreaseForAllowanceChange(_balances[msg.sender], allowance_, amount);
     }
 
     function finalizeApproval(uint256 service) internal {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
-        (bool decreased, uint256 amount) = _finalizeApproval(msg.sender, service);
-        if (decreased) {
-            _totalStakes[service] -= _calcStakeDecreaseForAllowanceChange(_balances[msg.sender], _allowances[msg.sender][service].allowance, amount);
-        } else {
-            _totalStakes[service] += _calcStakeIncreaseForAllowanceChange(_balances[msg.sender], _allowances[msg.sender][service].allowance, amount);
-        }
+        _finalizeApproval(msg.sender, service);
     }
 
     function _onSlash(address staker, uint256, uint256 amount) internal virtual override {
@@ -129,9 +130,9 @@ contract ERC20LockerExample is ERC20Locker {
 
             uint256[] memory services_ = services(msg.sender);
             uint256 len = services_.length;
-            uint256 balance = _balances[msg.sender];
             for (uint256 i; i < len; ++i) {
-                _totalStakes[services_[i]] -= _calcStakeDecreaseForBalanceChange(balance, _allowances[msg.sender][services_[i]].allowance, remainder);
+                _totalStakes[services_[i]] -=
+                    _calcStakeDecreaseForBalanceChange(_balances[msg.sender], _allowances[msg.sender][services_[i]].allowance, remainder);
             }
         }
         underlying.transfer(_burnAddress, amount);

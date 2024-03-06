@@ -190,34 +190,30 @@ abstract contract ERC20Locker is ILocker {
 
     mapping(address staker => mapping(uint256 service => Allowance)) _allowances;
 
-    function _registerApproval(address staker, uint256 service, uint256 amount) internal {
+    function _registerApproval(address staker, uint256 service, uint256 newAllowance) internal returns (bool finalized) {
         Allowance memory allowanceData = _allowances[staker][service];
         require(allowanceData.scheduledTime == 0, "Already registered");
-        require(allowanceData.allowance != amount, "No change");
-        bool decreasing = amount < allowanceData.allowance;
+        require(allowanceData.allowance != newAllowance, "No change");
+        bool decreasing = newAllowance < allowanceData.allowance;
         if (decreasing) {
-            require(amount < _allowances[staker][service].allowance, "Cannot decrease while locked-in");
+            require(newAllowance < _allowances[staker][service].allowance, "Cannot decrease while locked-in");
         }
 
-        _allowances[staker][service].scheduledAllowance = amount;
+        _allowances[staker][service].scheduledAllowance = newAllowance;
         _allowances[staker][service].scheduledTime = block.timestamp + (decreasing ? STAKER_WITHDRAWAL_DELAY : 0);
 
         // Note: Security consideration - The service should assume the staker will finalize the approval if the allowance is supposed to DECREASE.
-        // Note: Security consideration - The service should NOT assume the staker will finalize the approval if the allowance is supposed to INCREASE.
-        emit AllowanceChanged(staker, service, amount);
+        emit AllowanceChanged(staker, service, newAllowance);
+
+        if (!decreasing) {
+            _finalizeApproval(staker, service);
+            finalized = true;
+        }
     }
 
-    function _finalizeApproval(address staker, uint256 service) internal returns (bool decreased, uint256 amount) {
+    function _finalizeApproval(address staker, uint256 service) internal {
         Allowance memory allowanceData = _allowances[staker][service];
         require(allowanceData.scheduledTime != 0, "Not registered");
-
-        if (allowanceData.allowance > allowanceData.scheduledAllowance) {
-            decreased = true;
-            amount = allowanceData.allowance - allowanceData.scheduledAllowance;
-        } else {
-            decreased = false;
-            amount = allowanceData.scheduledAllowance - allowanceData.allowance;
-        }
 
         _allowances[staker][service].allowance = allowanceData.scheduledAllowance;
         _allowances[staker][service].scheduledTime = 0;
@@ -225,7 +221,8 @@ abstract contract ERC20Locker is ILocker {
         emit Approved(staker, service, allowanceData.scheduledAllowance);
     }
 
-    function allowance(address staker, uint256 service) external view returns (uint256 amount) {
+    // FOR EXTERNAL USE, MAINLY. ONLY USE INTERNALLY IF YOU KNOW WHAT YOU'RE DOING!
+    function allowance(address staker, uint256 service) public view returns (uint256 amount) {
         Allowance memory allowanceData = _allowances[staker][service];
         uint256 currentAllowance = allowanceData.allowance;
         uint256 newAllowance = allowanceData.scheduledAllowance;
@@ -235,9 +232,21 @@ abstract contract ERC20Locker is ILocker {
         return newAllowance < currentAllowance ? newAllowance : currentAllowance;
     }
 
+    // FOR EXTERNAL USE, MAINLY. ONLY USE INTERNALLY IF YOU KNOW WHAT YOU'RE DOING!
     function stakeOf(address staker, uint256 service) public view returns (uint256 stake) {
-        uint256 balance = _balanceOf(staker);
-        uint256 allowance_ = _allowances[staker][service].allowance;
+        uint256 balance = _balanceOf(staker); // taken out immediately (^) but remians slashable (*)
+        // uint256 allowance_ = _allowances[staker][service].allowance; // actual (*) but report the future one (^)
+        // so, when they ask what's the balance, they get what it will be
+        // when they ask what's the allowance, they get what it will be
+        // they should slash based on percentages, so the actual balance doesn't matter
+        // they SHOULD assume any allowance decrease will be finalized, and only care about the reported (future) allowance
+        // ... since they should slashed based on percentages and not amounts, the actual allowance doesn't matter
+        // btw when i say should slash based on percentages, i mean that the punishment A should be x%, not a static amount y.
+        // we track balances and allowances a bit differently - we need to sum the balance and withdrawal, but only read allowance, when working with them.
+        // so, what should we do here? this reports how much a staker has staked in a service
+        // total stakes for services are tracked on init withdrawal/approval when the balance tracking is updated, but allowance tracking is updated only if increasing, not decreasing
+        // therefore, we should use the future allowance, which we can get from the public getter
+        uint256 allowance_ = allowance(staker, service);
         return _getLower(allowance_, balance);
     }
 
