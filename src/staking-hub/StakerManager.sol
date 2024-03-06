@@ -26,6 +26,7 @@ abstract contract StakerManager is LockerManager {
         Subscription storage sub = _stakers.subscriptions[staker][service];
         require(!sub.subscribed, "Already subscribed");
         require(lockedInUntil > block.timestamp, "Invalid subscription term");
+        require(lockedInUntil < block.timestamp + 365 days, "Subscription term cannot be longer than 1 year");
         _stakers.subscriptions[staker][service] = Subscription(true, lockedInUntil, 0, 0);
         //++_stakers.data[staker].subscriptionCount;
         emit Subscribed(staker, service, lockedInUntil);

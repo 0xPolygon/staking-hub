@@ -31,7 +31,7 @@ contract StakingHub is SlashingManager {
         uint256 slashingPercentages = _slashingPercentages(service);
         uint256 len = lockers.length;
         for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onSubscribe(msg.sender, service, slashingPercentages.get(i));
+            locker(lockers[i]).onSubscribe(msg.sender, service, slashingPercentages.get(i), lockInUntil);
         }
         _service(service).onSubscribe(msg.sender, lockInUntil);
     }

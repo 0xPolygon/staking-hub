@@ -16,11 +16,14 @@ interface ILocker {
     /// @param amount The amount withdrawn.
     event Withdrawn(address staker, uint256 amount);
 
+    event AllowanceChanged(address staker, uint256 service, uint256 newAllowance);
+    event Approved(address staker, uint256 service, uint256 amount);
+
     /// @notice Called by the Staking Hub when a staker subscribes to a service. Must perform internal accounting such as updating the total supply of assets restaked to the service. May perform risk management.
     /// @param staker The staker subscribing to the service.
     /// @param service The service being subscribed to.
     /// @param maxSlashPercentage Maximum percentage that can be slashed from the staker's balance.
-    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external;
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint256 lockedInUntil) external;
 
     /// @notice Called by the Staking Hub when a staker unsubscribes from a service. Must perform internal accounting such as updating the total supply of assets restaked to the service.
     /// @param staker The staker unsubscribing from the service.

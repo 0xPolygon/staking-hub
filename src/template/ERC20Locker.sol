@@ -12,7 +12,7 @@ abstract contract ERC20Locker is ILocker {
 
     struct SlashingData {
         uint40 freezeStart;
-        uint216 totalSlashed;
+        uint256 totalSlashed;
         uint256 initialBalance;
     }
 
@@ -66,31 +66,36 @@ abstract contract ERC20Locker is ILocker {
         }
     }
 
-    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint256 lockedInUntil) external {
         require(msg.sender == address(_stakingHub), "Unauthorized");
-        _serviceStorage.addService(staker, service);
+        _serviceStorage.addService(staker, service, lockedInUntil);
+        _allowances[staker][service].allowance = type(uint256).max;
         _onSubscribe(staker, service, maxSlashPercentage);
     }
 
     function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {
         require(msg.sender == address(_stakingHub), "Unauthorized");
         _serviceStorage.removeService(staker, service);
+        _allowances[staker][service].allowance = 0;
+        _allowances[staker][service].scheduledTime = 0;
         _onUnsubscribe(staker, service, maxSlashPercentage);
     }
 
     function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external {
         require(msg.sender == address(_stakingHub), "Unauthorized");
         SlashingData storage slashingData = _getSlashingData(staker, freezeStart);
+        uint256 initialBalance = slashingData.initialBalance;
         uint256 totalSlashed = slashingData.totalSlashed;
-        if (totalSlashed == 100) return;
-        if (totalSlashed + percentage > 100) {
-            percentage = uint8(100 - totalSlashed);
-            totalSlashed = 100;
+        uint256 slashAmount = (_getLower(_allowances[staker][service].allowance, initialBalance) * percentage) / 100;
+        if (totalSlashed + slashAmount > initialBalance) {
+            slashAmount = initialBalance - totalSlashed;
+            if (slashAmount == 0) return;
+            totalSlashed = initialBalance;
         } else {
-            totalSlashed += uint216(percentage);
+            totalSlashed += slashAmount;
         }
-        uint256 amount = (slashingData.initialBalance * percentage) / 100;
-        _onSlash(staker, service, amount);
+        slashingData.totalSlashed = totalSlashed;
+        _onSlash(staker, service, slashAmount);
     }
 
     function balanceOf(address staker) external view returns (uint256 balance) {
@@ -153,11 +158,11 @@ abstract contract ERC20Locker is ILocker {
         return pending[staker].amount;
     }
 
-    function _onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual {}
+    function _onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual;
 
-    function _onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual {}
+    function _onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual;
 
-    function _onSlash(address staker, uint256 service, uint256 amount) internal virtual {}
+    function _onSlash(address staker, uint256 service, uint256 amount) internal virtual;
 
     function _balanceOf(address staker) internal view virtual returns (uint256 balance);
 
@@ -174,4 +179,82 @@ abstract contract ERC20Locker is ILocker {
     function _totalVotingPower() internal view virtual returns (uint256);
 
     function _totalVotingPower(uint256 service) internal view virtual returns (uint256);
+
+    // PARTIAL RESTAKING VIA APPROAVALS
+
+    struct Allowance {
+        uint256 allowance;
+        uint256 scheduledAllowance;
+        uint256 scheduledTime;
+    }
+
+    mapping(address staker => mapping(uint256 service => Allowance)) _allowances;
+
+    function _registerApproval(address staker, uint256 service, uint256 newAllowance) internal returns (bool finalized) {
+        Allowance memory allowanceData = _allowances[staker][service];
+        require(allowanceData.scheduledTime == 0, "Already registered");
+        require(allowanceData.allowance != newAllowance, "No change");
+        bool decreasing = newAllowance < allowanceData.allowance;
+        if (decreasing) {
+            require(newAllowance < _allowances[staker][service].allowance, "Cannot decrease while locked-in");
+        }
+
+        _allowances[staker][service].scheduledAllowance = newAllowance;
+        _allowances[staker][service].scheduledTime = block.timestamp + (decreasing ? STAKER_WITHDRAWAL_DELAY : 0);
+
+        // Note: Security consideration - The service should assume the staker will finalize the approval if the allowance is supposed to DECREASE.
+        emit AllowanceChanged(staker, service, newAllowance);
+
+        if (!decreasing) {
+            _finalizeApproval(staker, service);
+            finalized = true;
+        }
+    }
+
+    function _finalizeApproval(address staker, uint256 service) internal {
+        Allowance memory allowanceData = _allowances[staker][service];
+        require(allowanceData.scheduledTime != 0, "Not registered");
+
+        _allowances[staker][service].allowance = allowanceData.scheduledAllowance;
+        _allowances[staker][service].scheduledTime = 0;
+
+        emit Approved(staker, service, allowanceData.scheduledAllowance);
+    }
+
+    // FOR EXTERNAL USE, MAINLY. ONLY USE INTERNALLY IF YOU KNOW WHAT YOU'RE DOING!
+    function allowance(address staker, uint256 service) public view returns (uint256 amount) {
+        Allowance memory allowanceData = _allowances[staker][service];
+        uint256 currentAllowance = allowanceData.allowance;
+        uint256 newAllowance = allowanceData.scheduledAllowance;
+        // If nothing scheduled, return the allowance.
+        if (allowanceData.scheduledTime == 0) return currentAllowance;
+        // If something scheduled, return the new allowance if it's going to decrease, or the current allowance if it's going to increase.
+        return newAllowance < currentAllowance ? newAllowance : currentAllowance;
+    }
+
+    // FOR EXTERNAL USE, MAINLY. ONLY USE INTERNALLY IF YOU KNOW WHAT YOU'RE DOING!
+    function stakeOf(address staker, uint256 service) public view returns (uint256 stake) {
+        uint256 balance = _balanceOf(staker); // taken out immediately (^) but remians slashable (*)
+        // uint256 allowance_ = _allowances[staker][service].allowance; // actual (*) but report the future one (^)
+        // so, when they ask what's the balance, they get what it will be
+        // when they ask what's the allowance, they get what it will be
+        // they should slash based on percentages, so the actual balance doesn't matter
+        // they SHOULD assume any allowance decrease will be finalized, and only care about the reported (future) allowance
+        // ... since they should slashed based on percentages and not amounts, the actual allowance doesn't matter
+        // btw when i say should slash based on percentages, i mean that the punishment A should be x%, not a static amount y.
+        // we track balances and allowances a bit differently - we need to sum the balance and withdrawal, but only read allowance, when working with them.
+        // so, what should we do here? this reports how much a staker has staked in a service
+        // total stakes for services are tracked on init withdrawal/approval when the balance tracking is updated, but allowance tracking is updated only if increasing, not decreasing
+        // therefore, we should use the future allowance, which we can get from the public getter
+        uint256 allowance_ = allowance(staker, service);
+        return _getLower(allowance_, balance);
+    }
+
+    function _getLower(uint256 a, uint256 b) internal pure returns (uint256 lower) {
+        return a <= b ? a : b;
+    }
+
+    function _getServicesAndLockIns(address staker) internal view returns (uint256[] memory services_, uint256[] memory lockIns) {
+        return _serviceStorage.getServicesAndLockIns(staker);
+    }
 }
