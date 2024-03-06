@@ -69,12 +69,15 @@ abstract contract ERC20Locker is ILocker {
     function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint256 lockedInUntil) external {
         require(msg.sender == address(_stakingHub), "Unauthorized");
         _serviceStorage.addService(staker, service, lockedInUntil);
+        _allowances[staker][service].allowance = type(uint256).max;
         _onSubscribe(staker, service, maxSlashPercentage);
     }
 
     function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {
         require(msg.sender == address(_stakingHub), "Unauthorized");
         _serviceStorage.removeService(staker, service);
+        _allowances[staker][service].allowance = 0;
+        _allowances[staker][service].scheduledTime = 0;
         _onUnsubscribe(staker, service, maxSlashPercentage);
     }
 
@@ -155,11 +158,11 @@ abstract contract ERC20Locker is ILocker {
         return pending[staker].amount;
     }
 
-    function _onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual {}
+    function _onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual;
 
-    function _onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual {}
+    function _onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual;
 
-    function _onSlash(address staker, uint256 service, uint256 amount) internal virtual {}
+    function _onSlash(address staker, uint256 service, uint256 amount) internal virtual;
 
     function _balanceOf(address staker) internal view virtual returns (uint256 balance);
 

@@ -50,6 +50,14 @@ contract ERC20LockerExample is ERC20Locker {
         emit BalanceChanged(msg.sender, _balances[msg.sender]);
     }
 
+    function _onSubscribe(address staker, uint256 service, uint8) internal virtual override {
+        _totalStakes[service] += stakeOf(staker, service);
+    }
+
+    function _onUnsubscribe(address staker, uint256 service, uint8) internal virtual override {
+        _totalStakes[service] -= stakeOf(staker, service);
+    }
+
     /// @notice amount is immediately subtracted, so that stakers cannot use it in subscriptions anymore
     /// @notice amount can still be slashed during the withdrawal delay though (_slashPendingWithdrawal)
     function initiateWithdrawal(uint256 amount) external {
