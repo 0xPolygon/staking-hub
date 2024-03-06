@@ -223,7 +223,13 @@ abstract contract ERC20Locker is ILocker {
     }
 
     function allowance(address staker, uint256 service) external view returns (uint256 amount) {
-        return _allowances[staker][service].allowance;
+        Allowance memory allowanceData = _allowances[staker][service];
+        uint256 currentAllowance = allowanceData.allowance;
+        uint256 newAllowance = allowanceData.scheduledAllowance;
+        // If nothing scheduled, return the allowance.
+        if (allowanceData.scheduledTime == 0) return currentAllowance;
+        // If something scheduled, return the new allowance if it's going to decrease, or the current allowance if it's going to increase.
+        return newAllowance < currentAllowance ? newAllowance : currentAllowance;
     }
 
     function stakeOf(address staker, uint256 service) public view returns (uint256 stake) {
