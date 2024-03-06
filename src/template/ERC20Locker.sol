@@ -12,7 +12,7 @@ abstract contract ERC20Locker is ILocker {
 
     struct SlashingData {
         uint40 freezeStart;
-        uint216 totalSlashed;
+        uint256 totalSlashed;
         uint256 initialBalance;
     }
 
@@ -81,16 +81,18 @@ abstract contract ERC20Locker is ILocker {
     function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external {
         require(msg.sender == address(_stakingHub), "Unauthorized");
         SlashingData storage slashingData = _getSlashingData(staker, freezeStart);
+        uint256 initialBalance = slashingData.initialBalance;
         uint256 totalSlashed = slashingData.totalSlashed;
-        if (totalSlashed == 100) return;
-        if (totalSlashed + percentage > 100) {
-            percentage = uint8(100 - totalSlashed);
-            totalSlashed = 100;
+        uint256 slashAmount = (_getLower(_allowances[staker][service].allowance, initialBalance) * percentage) / 100;
+        if (totalSlashed + slashAmount > initialBalance) {
+            slashAmount = initialBalance - totalSlashed;
+            if (slashAmount == 0) return;
+            totalSlashed = initialBalance;
         } else {
-            totalSlashed += uint216(percentage);
+            totalSlashed += slashAmount;
         }
-        uint256 amount = (slashingData.initialBalance * percentage) / 100;
-        _onSlash(staker, service, amount);
+        slashingData.totalSlashed = totalSlashed;
+        _onSlash(staker, service, slashAmount);
     }
 
     function balanceOf(address staker) external view returns (uint256 balance) {
@@ -175,7 +177,7 @@ abstract contract ERC20Locker is ILocker {
 
     function _totalVotingPower(uint256 service) internal view virtual returns (uint256);
 
-    // RESTAKING VIA APPROAVALS
+    // PARTIAL RESTAKING VIA APPROAVALS
 
     struct Allowance {
         uint256 allowance;
@@ -227,7 +229,11 @@ abstract contract ERC20Locker is ILocker {
     function stakeOf(address staker, uint256 service) public view returns (uint256 stake) {
         uint256 balance = _balanceOf(staker);
         uint256 allowance_ = _allowances[staker][service].allowance;
-        return allowance_ <= balance ? allowance_ : balance;
+        return _getLower(allowance_, balance);
+    }
+
+    function _getLower(uint256 a, uint256 b) internal pure returns (uint256 lower) {
+        return a <= b ? a : b;
     }
 
     function _getServicesAndLockIns(address staker) internal view returns (uint256[] memory services_, uint256[] memory lockIns) {

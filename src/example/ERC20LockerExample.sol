@@ -175,10 +175,12 @@ contract ERC20LockerExample is ERC20Locker {
     }
 
     function _calcStakeIncreaseForAllowanceChange(uint256 balance, uint256 allowance_, uint256 amount) internal pure returns (uint256 amountToAdd) {
+        // just invert the params
         return _calcStakeIncreaseForBalanceChange(allowance_, balance, amount);
     }
 
     function _calcStakeDecreaseForAllowanceChange(uint256 balance, uint256 allowance_, uint256 amount) internal pure returns (uint256 amountToSub) {
+        // just invert the params
         return _calcStakeDecreaseForBalanceChange(allowance_, balance, amount);
     }
 }
