@@ -99,17 +99,17 @@ contract ERC20LockerExample is ERC20Locker {
 
     function registerApproval(uint256 service, uint256 amount) internal {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
-        bool decreasing = _registerApproval(msg.sender, service, amount);
-        if (decreasing) {
-            _totalStakes[service] -= _calcStakeDecreaseForAllowanceChange(_balances[msg.sender], _allowances[msg.sender][service].allowance, amount);
-        } else {
-            _totalStakes[service] += _calcStakeIncreaseForAllowanceChange(_balances[msg.sender], _allowances[msg.sender][service].allowance, amount);
-        }
+        _registerApproval(msg.sender, service, amount);
     }
 
     function finalizeApproval(uint256 service) internal {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
-        _finalizeApproval(msg.sender, service);
+        (bool decreased, uint256 amount) = _finalizeApproval(msg.sender, service);
+        if (decreased) {
+            _totalStakes[service] -= _calcStakeDecreaseForAllowanceChange(_balances[msg.sender], _allowances[msg.sender][service].allowance, amount);
+        } else {
+            _totalStakes[service] += _calcStakeIncreaseForAllowanceChange(_balances[msg.sender], _allowances[msg.sender][service].allowance, amount);
+        }
     }
 
     function _onSlash(address staker, uint256, uint256 amount) internal virtual override {
