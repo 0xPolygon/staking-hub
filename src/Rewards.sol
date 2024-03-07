@@ -7,26 +7,26 @@ interface IStakingHub {
 }
 
 interface ILocker {
-    function totalSupplyAt(uint256 service, uint256 blockNumber) external view returns (uint256);
-    function lastBalanceChange(address staker) external view returns (uint256 blockNumber);
-    function balanceOf(address staker) external view returns (uint256 balance);
-    function stakerPercentageAt(address staker, uint256 service, uint256 blockNumber) external view returns (uint256);
+    function totalStakeAt(uint256 service, uint256 blockNumber) external view returns (uint256 totalStake);
+    // The first element is a special element that tell the balance the staker had in the epoch they claimed for last.
+    // Any other elements return stakes for blocks when the stake changed, closest to the epoch beginnings (snapshots). This can be calculated as `lastClaimedEpochBlock + epochLength * n`. Up to the current epoch.
+    function getStakeChanges(address staker, uint256 service, uint256 lastClaimedEpochBlock, uint256 epochLength)
+        external
+        view
+        returns (uint256[] memory blocks, uint256[] memory stakes);
 }
 
+// TODO Reentrancy guard
 contract Rewards {
-    struct RewardData {
-        uint256 amount;
-        uint256 historicalRPT;
+    struct Distribution {
+        bool distributed;
+        mapping(ILocker locker => uint256) cumulativeRPT;
     }
 
     IStakingHub internal immutable _hub;
 
-    // full history
-    mapping(uint256 service => mapping(uint256 epoch => mapping(ILocker locker => RewardData rewards))) internal _history;
-    // all-time RPT
-    mapping(uint256 service => mapping(ILocker locker => uint256 rewardPerToken)) internal _cumulativeRewardsPerToken;
-    // claiming difference optimization
-    mapping(address staker => mapping(uint256 service => uint256 epoch)) internal _stakerLastClaim;
+    mapping(uint256 service => mapping(uint256 epoch => Distribution)) internal _history;
+    mapping(address staker => mapping(uint256 service => uint256 epoch)) internal _stakerClaimedThrough;
 
     constructor(IStakingHub hub) {
         _hub = hub;
@@ -36,49 +36,64 @@ contract Rewards {
         uint256 service = _hub.serviceId(msg.sender);
         ILocker[] memory lockers = _hub.lockers(service);
         require(lockers.length == amounts.length, "Invalid amounts length");
-
-        uint256 epoch = 0; // TODO (e.g. only allow for last epoch and disallow multiple)
-
+        uint256 epoch = _currentEpoch(service) - 1;
+        require(!_history[service][epoch].distributed, "Already distributed");
+        _history[service][epoch].distributed = true;
         for (uint256 l; l < lockers.length; ++l) {
-            // this is for efficient calc when balance hasn't changed_
-            uint256 totalStaked = lockers[l].totalSupplyAt(service, _epochToBlock(epoch));
+            uint256 totalStaked = lockers[l].totalStakeAt(service, _epochToBlock(epoch));
             if (totalStaked > 0) {
-                _cumulativeRewardsPerToken[service][lockers[l]] += amounts[l] / totalStaked; // TODO Fix math
+                _history[service][epoch].cumulativeRPT[lockers[l]] = amounts[l] / totalStaked; // TODO Solidity math
             }
+            // TODO Transfer
+        }
+    }
 
-            // this is for iterating when we can't calc efficiently because balance has been changing
-            _history[service][epoch][lockers[l]].amount = amounts[l];
-            _history[service][epoch][lockers[l]].historicalRPT = _cumulativeRewardsPerToken[service][lockers[l]];
+    function pendingRewards(address staker, uint256 service) public view returns (uint256 total) {
+        ILocker[] memory lockers = _hub.lockers(service);
+        for (uint256 l = 0; l < lockers.length; ++l) {
+            total += _pendingPerLocker(staker, service, lockers[l]);
         }
     }
 
     function claimRewards(address staker, uint256 service) external {
-        uint256 epoch = 0; // TODO
-        uint256 rewardPerToken = 0; // TODO
-        _stakerLastClaim[staker][service] = epoch;
         uint256 amount = pendingRewards(staker, service);
-        // TODO Transfer
+        _stakerClaimedThrough[staker][service] = _currentEpoch(service) - 1;
+        amount; // TODO Transfer
     }
 
-    function pendingRewards(address staker, uint256 service) public view returns (uint256 totalPendingRewards) {
-        ILocker[] memory lockers = _hub.lockers(service);
-        for (uint256 l = 0; l < lockers.length; ++l) {
-            if (_blockToEpoch(lockers[l].lastBalanceChange(staker)) <= _stakerLastClaim[staker][service]) {
-                // efficient
-                uint256 cumulativeRPTNow = _cumulativeRewardsPerToken[service][lockers[l]];
-                uint256 lastCumulativeRPT = _history[service][_stakerLastClaim[staker][service]][lockers[l]].historicalRPT;
-                uint256 stakerBalance_ = lockers[l].balanceOf(staker);
-                totalPendingRewards += stakerBalance_ * (cumulativeRPTNow - lastCumulativeRPT); // TODO Fix math
-            } else {
-                // iterative
-                uint256 currentEpoch = 0; // TODO
-                for (uint256 e = _stakerLastClaim[staker][service]; e < currentEpoch; ++e) {
-                    totalPendingRewards += lockers[l].stakerPercentageAt(staker, service, _epochToBlock(e)) * _history[service][e][lockers[l]].amount; // TODO Fix math
-                }
+    function _pendingPerLocker(address staker, uint256 service, ILocker locker) internal view returns (uint256 rewardTokens) {
+        uint256 currentEpoch = _currentEpoch(service);
+        uint256 lastClaimedEpoch = _stakerClaimedThrough[staker][service];
+        (uint256[] memory blocks, uint256[] memory stakes) =
+            locker.getStakeChanges(staker, service, _stakerClaimedThrough[staker][service], _epochLength(service));
+        if (blocks.length != 1) {
+            for (uint256 b = 1; b < blocks.length; ++b) {
+                uint256 lastCumulativeRPT = _history[service][lastClaimedEpoch].cumulativeRPT[locker];
+                uint256 balanceDifferentForEpoch = _blockToEpoch(blocks[b]);
+                uint256 claimableCumulativeRPT = _history[service][balanceDifferentForEpoch - 1].cumulativeRPT[locker] - lastCumulativeRPT;
+                rewardTokens += claimableCumulativeRPT * stakes[b - 1];
+                lastClaimedEpoch = balanceDifferentForEpoch - 1;
+                if (lastClaimedEpoch == currentEpoch) return (rewardTokens);
             }
         }
+        uint256 finalClaimableCumulativeRPT =
+            _history[service][currentEpoch - 1].cumulativeRPT[locker] - _history[service][lastClaimedEpoch].cumulativeRPT[locker];
+        rewardTokens += finalClaimableCumulativeRPT * stakes[blocks.length - 1];
     }
 
-    function _epochToBlock(uint256 epoch) internal view returns (uint256 blockNumber) {}
-    function _blockToEpoch(uint256 blockNumber) internal view returns (uint256 epoch) {}
+    function _currentEpoch(uint256 service) internal view returns (uint256 epoch) {
+        // TODO
+    }
+
+    function _epochLength(uint256 service) internal view returns (uint256 length) {
+        // TODO
+    }
+
+    function _epochToBlock(uint256 epoch) internal view returns (uint256 blockNumber) {
+        // TODO
+    }
+
+    function _blockToEpoch(uint256 blockNumber) internal view returns (uint256 epoch) {
+        // TODO
+    }
 }
