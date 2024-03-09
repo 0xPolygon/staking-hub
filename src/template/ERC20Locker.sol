@@ -21,14 +21,14 @@ abstract contract ERC20Locker is ILocker {
         uint256 amount;
     }
 
-    StakingHub internal immutable _stakingHub;
+    StakingHub internal _stakingHub;
     uint256 internal _id;
 
     mapping(address staker => SlashingData[]) internal _slashingData;
     mapping(address staker => PendingWithdrawal) pending;
     ServiceStorage internal _serviceStorage;
 
-    constructor(address stakingHub) {
+    function __initializeERC20Locker(address stakingHub) internal {
         _stakingHub = StakingHub(stakingHub);
     }
 

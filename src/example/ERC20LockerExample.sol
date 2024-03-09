@@ -15,9 +15,10 @@ contract ERC20LockerExample is ERC20Locker {
     uint256 internal _globalTotalSupply;
     mapping(uint256 serviceId => uint256 supply) internal _serviceSupplies;
 
-    constructor(address _underlying, address stakingHub, address burnAddress) ERC20Locker(stakingHub) {
+    constructor(address _underlying, address stakingHub, address burnAddress) {
         underlying = IERC20(_underlying);
         _burnAddress = burnAddress;
+        __initializeERC20Locker(stakingHub);
     }
 
     function registerLocker() external returns (uint256 id) {
