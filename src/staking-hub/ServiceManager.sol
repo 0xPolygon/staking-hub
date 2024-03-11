@@ -8,8 +8,6 @@ import {IService} from "../interface/IService.sol";
 import {ILocker} from "../interface/ILocker.sol";
 
 abstract contract ServiceManager is StakerManager {
-    using PackedUints for uint256;
-
     struct Service {
         address service;
         uint256[] lockers;
@@ -41,7 +39,7 @@ abstract contract ServiceManager is StakerManager {
         formatted = new uint256[](len);
         for (uint256 i; i < len; ++i) {
             formatted[i] = lockers[i].lockerId;
-            slashingPercentages.set(lockers[i].maxSlashPercentage, i);
+            slashingPercentages = PackedUints.set(slashingPercentages, lockers[i].maxSlashPercentage, i);
         }
     }
 
@@ -51,8 +49,9 @@ abstract contract ServiceManager is StakerManager {
         uint256 lastId;
         for (uint256 i = 0; i < len; ++i) {
             uint256 lockerId_ = lockers[i].lockerId;
-            require(lockerId_ > lastId, "Duplicate Locker or unsorted list");
+            require(lockerId_ > lastId, "Duplicate/zero Locker or unsorted list");
             require(lockers[i].maxSlashPercentage < 101, "Invalid max slash percentage");
+            lastId = lockerId_;
         }
         require(lastId <= _lockerStorage.counter, "Invalid locker");
     }
@@ -76,7 +75,7 @@ abstract contract ServiceManager is StakerManager {
     }
 
     function _slashingPercentage(uint256 id, uint256 index) internal view returns (uint8 percentage) {
-        percentage = _services.data[id].slashingPercentages.get(index);
+        percentage = PackedUints.get(_services.data[id].slashingPercentages, index);
     }
 
     function _unsubNotice(uint256 id) internal view override returns (uint40 notice) {

@@ -6,10 +6,7 @@ struct LockerSettings {
     uint8 maxSlashPercentage;
 }
 
-/// @title Staking Hub
-/// @author Polygon Labs
-/// @notice The Staking Hub is the central contract of the Polygon Staking Layer and is responsible for managing and coordinating stakers, lockers and services.
-interface IStakingHub {
+interface IStakingHubEvents {
     /// @notice Emitted when a new locker is registered with the staking hub.
     /// @param locker The address of the locker.
     /// @param lockerId The assigned id of the locker.
@@ -75,7 +72,12 @@ interface IStakingHub {
     /// @param lockerIds The ids of the lockers being slashed.
     /// @param percentages The percentages of each locker being slashed.
     event StakerSlashed(address indexed staker, uint256 indexed serviceId, uint256[] lockerIds, uint8[] percentages);
+}
 
+/// @title Staking Hub
+/// @author Polygon Labs
+/// @notice The Staking Hub is the central contract of the Polygon Staking Layer and is responsible for managing and coordinating stakers, lockers and services.
+interface IStakingHub is IStakingHubEvents {
     /// @notice Registers a new locker with the staking hub.
     /// @dev Must be called by the locker contract.
     /// @dev Emits `LockerRegistered` on successful registration.
