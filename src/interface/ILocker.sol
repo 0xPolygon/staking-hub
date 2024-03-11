@@ -9,12 +9,12 @@ interface ILocker {
     /// @dev Must be emitted on balance changes (depositing, initiating withdrawal, slashing, etc.).
     /// @param staker The staker whose balance changed.
     /// @param newBalance The new balance of the staker.
-    event BalanceChanged(address staker, uint256 newBalance);
+    event BalanceChanged(address indexed staker, uint256 indexed newBalance);
 
     /// @dev Should be emitted when a staker withdraws from the locker.
     /// @param staker The staker who withdraws their balance or parts of it.
     /// @param amount The amount withdrawn.
-    event Withdrawn(address staker, uint256 amount);
+    event Withdrawn(address indexed staker, uint256 indexed amount);
 
     /// @notice Called by the Staking Hub when a staker subscribes to a service. Must perform internal accounting such as updating the total supply of assets restaked to the service. May perform risk management.
     /// @param staker The staker subscribing to the service.

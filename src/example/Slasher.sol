@@ -9,7 +9,6 @@ import {StakingHub} from "../StakingHub.sol";
 /// @notice A Slasher separates the freezing and slashing functionality from a Service.
 contract Slasher is ISlasher {
     address immutable service;
-    uint256 immutable serviceId;
     StakingHub immutable stakingHub;
 
     /// @notice amount of time the staker has to prove their innocence.
@@ -17,11 +16,10 @@ contract Slasher is ISlasher {
 
     mapping(address => uint256) public gracePeriodEnds;
 
-    constructor(StakingHub stakingHub_, uint256 serviceId_) {
+    constructor(StakingHub stakingHub_) {
         // deployed by service in this example
         service = msg.sender;
         stakingHub = stakingHub_;
-        serviceId = serviceId_;
     }
 
     function freeze(address staker, bytes calldata proof) public {

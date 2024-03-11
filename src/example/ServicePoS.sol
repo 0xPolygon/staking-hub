@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {IService} from "../interface/IService.sol";
-import {ISlasher} from "./interface/ISlasher.sol";
+import {Slasher} from "../example/Slasher.sol";
 import {ERC20Locker} from "../template/ERC20Locker.sol";
 import {StakingHub, LockerSettings} from "../StakingHub.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
@@ -13,19 +13,22 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /// @notice Stakers can subscribe to this Service using the Staking Hub.
 contract ServicePoS is IService, Ownable {
     StakingHub immutable stakingHub;
-    ISlasher immutable slasher;
-    ERC20Locker[] lockerContracts;
+    Slasher public slasher;
+    ERC20Locker[] public lockerContracts;
+
+    uint256 public id;
 
     // self-registers as Service, set msg.sender as owner
-    constructor(address _stakingHub, LockerSettings[] memory _lockers, ERC20Locker[] memory _lockerContracts, uint40 unsubNotice, address _slasher)
-        Ownable(msg.sender)
-    {
+    constructor(address _stakingHub, ERC20Locker[] memory _lockerContracts) Ownable(msg.sender) {
         stakingHub = StakingHub(_stakingHub);
 
-        stakingHub.registerService(_lockers, unsubNotice, _slasher);
-
-        slasher = ISlasher(_slasher);
         lockerContracts = _lockerContracts;
+    }
+
+    function init(LockerSettings[] memory _settings, uint40 unsubNotice) public {
+        slasher = new Slasher(stakingHub);
+
+        id = stakingHub.registerService(_settings, unsubNotice, address(slasher));
     }
 
     function initiateSlasherUpdate(address _slasher) public onlyOwner {

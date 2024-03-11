@@ -39,15 +39,15 @@ contract ERC20LockerExample is ERC20Locker {
         _balances[user] += amount;
         _globalTotalSupply += amount;
 
-        uint256[] memory services = services(user);
-        uint256 len = services.length;
+        uint256[] memory userServices = services(user);
+        uint256 len = userServices.length;
         for (uint256 i; i < len; ++i) {
-            _serviceSupplies[services[i]] += amount;
+            _serviceSupplies[userServices[i]] += amount;
         }
 
         underlying.transferFrom(msg.sender, address(this), amount);
 
-        emit BalanceChanged(msg.sender, _balances[msg.sender]);
+        emit BalanceChanged(user, _balances[user]);
     }
 
     /// @notice amount is immediately subtracted, so that stakers cannot use it in subscriptions anymore
@@ -61,10 +61,10 @@ contract ERC20LockerExample is ERC20Locker {
         _balances[msg.sender] -= amount;
         _globalTotalSupply -= amount;
 
-        uint256[] memory services = services(msg.sender);
-        uint256 len = services.length;
+        uint256[] memory userServices = services(msg.sender);
+        uint256 len = userServices.length;
         for (uint256 i; i < len; ++i) {
-            _serviceSupplies[services[i]] -= amount;
+            _serviceSupplies[userServices[i]] -= amount;
         }
 
         emit BalanceChanged(msg.sender, _balances[msg.sender]);
@@ -88,10 +88,10 @@ contract ERC20LockerExample is ERC20Locker {
             _balances[msg.sender] -= remainder;
             _globalTotalSupply -= remainder;
 
-            uint256[] memory services = services(msg.sender);
-            uint256 len = services.length;
+            uint256[] memory userServices = services(msg.sender);
+            uint256 len = userServices.length;
             for (uint256 i; i < len; ++i) {
-                _serviceSupplies[services[i]] -= remainder;
+                _serviceSupplies[userServices[i]] -= remainder;
             }
         }
         underlying.transfer(_burnAddress, amount);
