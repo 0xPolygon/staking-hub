@@ -5,6 +5,8 @@ import "forge-std/Test.sol";
 
 import "src/StakingHub.sol";
 import "src/interface/IStakingHub.sol";
+import "src/interface/IService.sol";
+import "src/interface/ILocker.sol";
 
 abstract contract Deployed is Test, IStakingHubEvents {
     StakingHub hub;
@@ -12,7 +14,13 @@ abstract contract Deployed is Test, IStakingHubEvents {
     address[] private _services;
     address[] private _slashers;
     address[] private _stakers;
+    address troll;
 
+    /*
+    Set up explanation:
+        - Deploys Hub, 10 lockers, 10 services, 10 slashers.
+        - Creates 10 stakers and a troll (🧌).
+    */
     function setUp() public virtual {
         hub = new StakingHub();
         for (uint256 i; i < 10; ++i) {
@@ -21,6 +29,7 @@ abstract contract Deployed is Test, IStakingHubEvents {
             _slashers.push(address(new SlasherMock()));
             _stakers.push(makeAddr(string.concat("staker", vm.toString(i))));
         }
+        troll = makeAddr(unicode"🧌");
     }
 
     function locker(uint256 id) internal view returns (address) {
@@ -34,11 +43,15 @@ abstract contract Deployed is Test, IStakingHubEvents {
     function slasher(uint256 id) internal view returns (address) {
         return _slashers[id - 1];
     }
+
+    function staker(uint256 id) internal view returns (address) {
+        return _stakers[id - 1];
+    }
 }
 
 contract StakingHubTest_Deployed is Deployed {
     function testRevert_registerLocker_NotFound() public {
-        vm.prank(makeAddr("no code"));
+        vm.prank(troll);
         vm.expectRevert("Locker contract not found");
         hub.registerLocker();
     }
@@ -96,7 +109,7 @@ contract StakingHubTest_Deployed is Deployed {
         hub.registerLocker();
         vm.prank(locker(2));
         hub.registerLocker();
-        vm.prank(makeAddr("no code"));
+        vm.prank(troll);
         LockerSettings[] memory lockers = new LockerSettings[](2);
         lockers[0] = LockerSettings(1, 0);
         lockers[1] = LockerSettings(2, 100);
@@ -168,13 +181,13 @@ abstract contract Registered is Deployed {
 
 contract StakingHubTest_Registered is Registered {
     function testRevert_registerLocker_AlreadyRegistered() public {
-        vm.startPrank(locker(10));
+        vm.prank(locker(10));
         vm.expectRevert("Locker already registered");
         hub.registerLocker();
     }
 
     function testRevert_registerService_AlreadyRegistered() public {
-        vm.startPrank(service(10));
+        vm.prank(service(10));
         LockerSettings[] memory lockers = new LockerSettings[](1);
         lockers[0] = LockerSettings(10, 0);
         vm.expectRevert("Service already registered");
@@ -182,6 +195,7 @@ contract StakingHubTest_Registered is Registered {
     }
 
     function testRevert_initiateSlasherUpdate_NotRegistered() public {
+        vm.prank(troll);
         vm.expectRevert("Service not registered");
         hub.initiateSlasherUpdate(address(0));
     }
@@ -213,6 +227,7 @@ contract StakingHubTest_Registered is Registered {
     }
 
     function testRevert_finalizeSlasherUpdate_NotRegistered() public {
+        vm.prank(troll);
         vm.expectRevert("Service not registered");
         hub.finalizeSlasherUpdate();
     }
@@ -231,7 +246,7 @@ contract StakingHubTest_Registered is Registered {
         hub.finalizeSlasherUpdate();
     }
 
-    function testRevert_finalizeSlasherUpdate() public {
+    function test_finalizeSlasherUpdate() public {
         vm.startPrank(service(1));
         hub.initiateSlasherUpdate(slasher(2));
         skip(7 days + 1 days);
@@ -241,10 +256,73 @@ contract StakingHubTest_Registered is Registered {
         vm.expectRevert("Slasher update not initiated");
         hub.finalizeSlasherUpdate();
     }
+
+    function testRevert_freeze_NotSubscribed() public {
+        vm.prank(slasher(1));
+        vm.expectRevert("Not subscribed");
+        hub.freeze(staker(1));
+    }
+
+    function test_freeze() public {
+        // skip(7 days);
+        vm.prank(staker(1));
+        hub.subscribe(1, 0);
+        vm.prank(slasher(1));
+        vm.expectEmit();
+        emit StakerFrozen(staker(1), 1, block.timestamp + 7 days);
+        hub.freeze(staker(1));
+    }
+
+    function testRevert_freeze_AlreadyFrozen() public {
+        vm.prank(staker(1));
+        hub.subscribe(1, 0);
+        vm.startPrank(slasher(1));
+        hub.freeze(staker(1));
+        skip(7 days - 1);
+        vm.expectRevert("Already frozen by this service");
+        hub.freeze(staker(1));
+    }
+
+    function test_freeze_NewPeriod() public {
+        vm.prank(staker(1));
+        hub.subscribe(1, 0);
+        vm.startPrank(slasher(1));
+        hub.freeze(staker(1));
+        skip(7 days);
+        // Foundry bug?
+        // Legend: {result when line 267 commented out} vs {result when line 267 UNcommented}
+        console.log(block.timestamp); // 604801 vs 604801
+        console.log(7 days); // 604800 vs 604800
+        console.log(604_801 + 7 days); // 1209601 vs 1209601
+        console.log(block.timestamp + 604_800); // 604801 vs 1209601
+        console.log(block.timestamp + 7 days); // 604801 vs 1209601
+        vm.expectEmit();
+        emit StakerFrozen(staker(1), 1, block.timestamp + 7 days);
+        hub.freeze(staker(1));
+    }
 }
 
-contract LockerMock {}
+contract LockerMock is ILocker {
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {}
+    function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {}
+    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external {}
+    function id() external view returns (uint256) {}
+    function balanceOf(address staker) external view returns (uint256 amount) {}
+    function balanceOf(address staker, uint256 service) external view returns (uint256 amount) {}
+    function votingPowerOf(address staker) external view returns (uint256 votingPower) {}
+    function votingPowerOf(address staker, uint256 service) external view returns (uint256 votingPower) {}
+    function totalSupply() external view returns (uint256) {}
+    function totalSupply(uint256 service) external view returns (uint256) {}
+    function totalVotingPower() external view returns (uint256) {}
+    function totalVotingPower(uint256 service) external view returns (uint256) {}
+    function services(address staker) external view returns (uint256[] memory) {}
+    function isSubscribed(address staker, uint256 service) external view returns (bool) {}
+}
 
-contract ServiceMock {}
+contract ServiceMock is IService {
+    function onSubscribe(address staker, uint256 lockingInUntil) external {}
+    function onInitiateUnsubscribe(address staker, bool lockedIn) external {}
+    function onFinalizeUnsubscribe(address staker) external {}
+}
 
 contract SlasherMock {}
