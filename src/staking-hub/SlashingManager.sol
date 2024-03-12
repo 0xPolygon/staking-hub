@@ -134,6 +134,7 @@ abstract contract SlashingManager is ServiceManager {
     }
 
     function _isFrozenBy(address staker, uint256 service) internal view returns (bool) {
+        if (!_isFrozen(staker)) return false;
         uint256 freezeStart = _slashers.data[staker].freezeStart;
         return _slashers.data[staker].serviceData[freezeStart][service].frozen;
     }
