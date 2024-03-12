@@ -215,7 +215,7 @@ contract StakingHubTest_Registered is Registered {
     function test_initiateSlasherUpdate() public {
         vm.prank(service(1));
         vm.expectEmit();
-        emit SlasherUpdateInitiated(1, slasher(2), uint40(block.timestamp + 7 days + 1 days));
+        emit SlasherUpdateInitiated(1, slasher(2), uint40(vm.getBlockTimestamp() + 7 days + 1 days));
         hub.initiateSlasherUpdate(slasher(2));
     }
 
@@ -264,12 +264,11 @@ contract StakingHubTest_Registered is Registered {
     }
 
     function test_freeze() public {
-        // skip(7 days);
         vm.prank(staker(1));
         hub.subscribe(1, 0);
         vm.prank(slasher(1));
         vm.expectEmit();
-        emit StakerFrozen(staker(1), 1, block.timestamp + 7 days);
+        emit StakerFrozen(staker(1), 1, vm.getBlockTimestamp() + 7 days);
         hub.freeze(staker(1));
     }
 
@@ -289,15 +288,8 @@ contract StakingHubTest_Registered is Registered {
         vm.startPrank(slasher(1));
         hub.freeze(staker(1));
         skip(7 days);
-        // Foundry bug?
-        // Legend: {result when line 267 commented out} vs {result when line 267 UNcommented}
-        console.log(block.timestamp); // 604801 vs 604801
-        console.log(7 days); // 604800 vs 604800
-        console.log(604_801 + 7 days); // 1209601 vs 1209601
-        console.log(block.timestamp + 604_800); // 604801 vs 1209601
-        console.log(block.timestamp + 7 days); // 604801 vs 1209601
         vm.expectEmit();
-        emit StakerFrozen(staker(1), 1, block.timestamp + 7 days);
+        emit StakerFrozen(staker(1), 1, vm.getBlockTimestamp() + 7 days);
         hub.freeze(staker(1));
     }
 }
