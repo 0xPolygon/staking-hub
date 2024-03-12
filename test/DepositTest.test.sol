@@ -71,9 +71,39 @@ contract DepositTest is Test {
         locker.depositFor(user, amount);
     }
 
-    function test_deposit_whenSubscribed(uint256 amount) external {}
+    // services subscribed to by this user should have the total balances updated
+    function test_deposit_whenSubscribed(uint256 amount) external {
+        vm.assume(amount > 0);
+        stakingHub.subscribe(service.id(), WEEK);
 
-    // all services subscribed to by this user should have the total balances updated
+        mintAndApprove(amount);
+        locker.deposit(amount);
+
+        assertDeposit(address(this), amount);
+
+        assertEq(amount, locker.totalSupply(service.id()));
+    }
+
+    function test_deposit_whenSubscribedToMultiple(uint256 amount) external {
+        vm.assume(amount > 0);
+        ServicePoS service1 = new ServicePoS(address(stakingHub), lockers);
+        service1.init(settings, WEEK);
+        ServicePoS service2 = new ServicePoS(address(stakingHub), lockers);
+        service2.init(settings, WEEK);
+
+        stakingHub.subscribe(service.id(), WEEK);
+        stakingHub.subscribe(service1.id(), WEEK);
+
+        mintAndApprove(amount);
+        locker.deposit(amount);
+
+        assertDeposit(address(this), amount);
+
+        assertEq(amount, locker.totalSupply(service.id()));
+        assertEq(amount, locker.totalSupply(service1.id()));
+        // not subscribed to service2
+        assertEq(0, locker.totalSupply(service2.id()));
+    }
 
     function deposit(uint256 amount) private {
         mintAndApprove(amount);
