@@ -49,7 +49,7 @@ abstract contract ERC20Locker is ILocker {
         PendingWithdrawal storage pendingWithdrawal = pending[staker];
         amount = pendingWithdrawal.amount;
         require(amount != 0, "Withrawal not initiated");
-        require(pendingWithdrawal.timestamp > block.timestamp, "Cannot withdraw at this time");
+        require(pendingWithdrawal.timestamp < block.timestamp, "Cannot withdraw at this time");
         delete pending[staker];
     }
 
