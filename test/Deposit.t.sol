@@ -11,7 +11,7 @@ import {ILocker} from "../src/interface/ILocker.sol";
 import {ServicePoS} from "../src/example/ServicePoS.sol";
 import {Slasher} from "../src/example/Slasher.sol";
 
-contract DepositTest is Test {
+contract Deposit is Test {
     ERC20Mock public tkn;
     StakingHub public stakingHub;
     ERC20LockerExample public locker;
@@ -81,6 +81,23 @@ contract DepositTest is Test {
 
         assertDeposit(address(this), amount);
 
+        assertEq(amount, locker.balanceOf(address(this), service.id()));
+        assertEq(amount, locker.totalSupply(service.id()));
+    }
+
+    function test_depositFor_whenSubscribed(address user, uint256 amount) external {
+        vm.assume(amount > 0);
+        vm.assume(user != address(0));
+        uint256 id = service.id();
+        vm.prank(user);
+        stakingHub.subscribe(id, WEEK);
+
+        mintAndApprove(amount);
+        locker.depositFor(user, amount);
+
+        assertDeposit(user, amount);
+
+        assertEq(amount, locker.balanceOf(user, service.id()));
         assertEq(amount, locker.totalSupply(service.id()));
     }
 
@@ -99,9 +116,45 @@ contract DepositTest is Test {
 
         assertDeposit(address(this), amount);
 
+        assertEq(amount, locker.balanceOf(address(this), service.id()));
         assertEq(amount, locker.totalSupply(service.id()));
+
+        assertEq(amount, locker.balanceOf(address(this), service1.id()));
         assertEq(amount, locker.totalSupply(service1.id()));
         // not subscribed to service2
+        assertEq(0, locker.balanceOf(address(this), service2.id()));
+        assertEq(0, locker.totalSupply(service2.id()));
+    }
+
+    function test_depositFor_whenSubscribedToMultiple(address user, uint256 amount) external {
+        vm.assume(amount > 0);
+        vm.assume(user != address(0));
+
+        ServicePoS service1 = new ServicePoS(address(stakingHub), lockers);
+        service1.init(settings, WEEK);
+        ServicePoS service2 = new ServicePoS(address(stakingHub), lockers);
+        service2.init(settings, WEEK);
+
+        uint256 id = service.id();
+        vm.prank(user);
+        stakingHub.subscribe(id, WEEK);
+
+        id = service1.id();
+        vm.prank(user);
+        stakingHub.subscribe(id, WEEK);
+
+        mintAndApprove(amount);
+        locker.depositFor(user, amount);
+
+        assertDeposit(user, amount);
+
+        assertEq(amount, locker.balanceOf(user, service.id()));
+        assertEq(amount, locker.totalSupply(service.id()));
+
+        assertEq(amount, locker.balanceOf(user, service1.id()));
+        assertEq(amount, locker.totalSupply(service1.id()));
+        // not subscribed to service2
+        assertEq(0, locker.balanceOf(user, service2.id()));
         assertEq(0, locker.totalSupply(service2.id()));
     }
 
