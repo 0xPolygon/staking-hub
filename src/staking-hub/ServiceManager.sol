@@ -23,6 +23,10 @@ abstract contract ServiceManager is StakerManager {
 
     ServiceStorage internal _services;
 
+    function serviceId(address serviceAddr) external view returns (uint256 id) {
+        id = _serviceId(serviceAddr);
+    }
+
     function _setService(address service, uint256[] memory lockers, uint256 slashingPercentages, uint40 unsubNotice) internal returns (uint256 id) {
         require(service.code.length != 0, "Service contract not found");
         require(_services.ids[service] == 0, "Service already registered");
@@ -49,7 +53,7 @@ abstract contract ServiceManager is StakerManager {
         uint256 lastId;
         for (uint256 i = 0; i < len; ++i) {
             uint256 lockerId_ = lockers[i].lockerId;
-            require(lockerId_ > lastId, "Duplicate/zero Locker or unsorted list");
+            require(lockerId_ > lastId, "Duplicate/zero locker or unsorted list");
             require(lockers[i].maxSlashPercentage < 101, "Invalid max slash percentage");
             lastId = lockerId_;
         }
@@ -84,9 +88,5 @@ abstract contract ServiceManager is StakerManager {
 
     function _isSubscribed(address staker, uint256 id) internal view returns (bool) {
         return _stakers.subscriptions[staker][id].subscribed;
-    }
-
-    function serviceId(address serviceAddr) external view returns (uint256 id) {
-        id = _serviceId(serviceAddr);
     }
 }

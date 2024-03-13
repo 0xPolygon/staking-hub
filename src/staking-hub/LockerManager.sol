@@ -13,15 +13,6 @@ abstract contract LockerManager is IStakingHub {
 
     LockerStorage internal _lockerStorage;
 
-    function _setLocker(address newLocker) internal returns (uint256 id) {
-        require(newLocker.code.length != 0, "Locker contract not found");
-        require(_lockerStorage.ids[newLocker] == 0, "Locker already registered");
-        id = ++_lockerStorage.counter;
-        _lockerStorage.ids[newLocker] = id;
-        _lockerStorage.addresses[id] = newLocker;
-        emit LockerRegistered(msg.sender, id);
-    }
-
     function lockerId(address lockerAddr) public view returns (uint256 id) {
         id = _lockerStorage.ids[lockerAddr];
         require(id != 0, "Locker not registered");
@@ -30,5 +21,14 @@ abstract contract LockerManager is IStakingHub {
     function locker(uint256 id) public view returns (ILocker locker_) {
         locker_ = ILocker(_lockerStorage.addresses[id]);
         require(address(locker_) != address(0), "Locker not registered");
+    }
+
+    function _setLocker(address newLocker) internal returns (uint256 id) {
+        require(newLocker.code.length != 0, "Locker contract not found");
+        require(_lockerStorage.ids[newLocker] == 0, "Locker already registered");
+        id = ++_lockerStorage.counter;
+        _lockerStorage.ids[newLocker] = id;
+        _lockerStorage.addresses[id] = newLocker;
+        emit LockerRegistered(msg.sender, id);
     }
 }

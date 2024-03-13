@@ -82,7 +82,7 @@ contract StakingHubTest_Deployed is Deployed {
         LockerSettings[] memory lockers = new LockerSettings[](2);
         lockers[0] = LockerSettings(2, 0);
         lockers[1] = LockerSettings(1, 0);
-        vm.expectRevert("Duplicate/zero Locker or unsorted list");
+        vm.expectRevert("Duplicate/zero locker or unsorted list");
         hub.registerService(lockers, 0, slasher(1));
     }
 
@@ -338,11 +338,65 @@ contract StakingHubTest_Registered is Registered {
         vm.expectRevert("Already frozen by this service");
         hub.freeze(staker(1));
     }
+
+    function testMalice_5_CompromizedLocker() public {
+        address vulnerableLocker = address(new RevertingLockerDummy());
+        address popularLocker = address(new LockerMock());
+        address sincereService = address(new ServiceMock());
+        address popularService = address(new ServiceMock());
+        address unsuspectingStaker = makeAddr("unsuspectingStaker");
+        address detective = makeAddr(unicode"🕵️‍♂️");
+        vm.prank(vulnerableLocker);
+        uint256 lockerId1 = hub.registerLocker();
+        vm.prank(popularLocker);
+        uint256 lockerId2 = hub.registerLocker();
+        vm.prank(sincereService);
+        LockerSettings[] memory lockers = new LockerSettings[](2);
+        lockers[0] = LockerSettings(lockerId1, 10);
+        lockers[1] = LockerSettings(lockerId2, 10);
+        uint256 serviceId1 = hub.registerService(lockers, 1, sincereService);
+        vm.prank(popularService);
+        lockers = new LockerSettings[](1);
+        lockers[0] = LockerSettings(lockerId2, 10);
+        uint256 serviceId2 = hub.registerService(lockers, 1, popularService);
+        vm.startPrank(unsuspectingStaker);
+        hub.subscribe(serviceId1, 0);
+        hub.subscribe(serviceId2, 0);
+        vm.stopPrank();
+        RevertingLockerDummy(vulnerableLocker).revertSubscriptions();
+        RevertingLockerDummy(vulnerableLocker).revertUnsubscriptions();
+        vm.prank(unsuspectingStaker);
+        vm.expectRevert("Locker!");
+        hub.initiateUnsubscribe(serviceId1);
+        vm.prank(detective);
+        vm.expectRevert("Locker!");
+        hub.subscribe(serviceId1, 0);
+        address zombieService = sincereService;
+        address unsafeStaker = unsuspectingStaker;
+        vm.startPrank(zombieService);
+        hub.freeze(unsafeStaker);
+        uint8[] memory percentages = new uint8[](2);
+        percentages[0] = 10;
+        percentages[1] = 10;
+        hub.slash(unsafeStaker, percentages);
+        vm.stopPrank();
+        skip(700 days);
+        vm.prank(unsuspectingStaker);
+        vm.expectRevert("Locker!");
+        hub.initiateUnsubscribe(serviceId1);
+        vm.startPrank(zombieService);
+        hub.freeze(unsafeStaker);
+        percentages = new uint8[](2);
+        percentages[0] = 10;
+        percentages[1] = 10;
+        hub.slash(unsafeStaker, percentages);
+    }
 }
 
 contract LockerMock {
     function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {}
     function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {}
+    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external {}
 }
 
 contract ServiceMock {
@@ -350,3 +404,26 @@ contract ServiceMock {
 }
 
 contract SlasherMock {}
+
+contract RevertingLockerDummy {
+    bool revertOnSubscribe;
+    bool revertOnUnsubscribe;
+
+    function revertSubscriptions() external {
+        revertOnSubscribe = true;
+    }
+
+    function revertUnsubscriptions() external {
+        revertOnUnsubscribe = true;
+    }
+
+    function onSubscribe(address, uint256, uint8) external view {
+        if (revertOnSubscribe) revert("Locker!");
+    }
+
+    function onUnsubscribe(address, uint256, uint8) external view {
+        if (revertOnUnsubscribe) revert("Locker!");
+    }
+
+    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external {}
+}
