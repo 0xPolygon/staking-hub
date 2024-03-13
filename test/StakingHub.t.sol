@@ -78,7 +78,7 @@ contract StakingHubTest_Deployed is Deployed {
     }
 
     function testRevert_registerService_UnsortedLockers() public {
-        vm.startPrank(service(1));
+        vm.prank(service(1));
         LockerSettings[] memory lockers = new LockerSettings[](2);
         lockers[0] = LockerSettings(2, 0);
         lockers[1] = LockerSettings(1, 0);
@@ -87,7 +87,7 @@ contract StakingHubTest_Deployed is Deployed {
     }
 
     function testRevert_registerService_InvalidSlashPercentage() public {
-        vm.startPrank(service(1));
+        vm.prank(service(1));
         LockerSettings[] memory lockers = new LockerSettings[](2);
         lockers[0] = LockerSettings(1, 0);
         lockers[1] = LockerSettings(2, 101);
@@ -96,7 +96,7 @@ contract StakingHubTest_Deployed is Deployed {
     }
 
     function testRevert_registerService_InvalidLocker() public {
-        vm.startPrank(service(1));
+        vm.prank(service(1));
         LockerSettings[] memory lockers = new LockerSettings[](2);
         lockers[0] = LockerSettings(1, 0);
         lockers[1] = LockerSettings(2, 100);
@@ -156,11 +156,13 @@ abstract contract Registered is Deployed {
         - Service ID tells how many lockers the service uses (starting from locker ID 1).
         - The maximum slashing percentage for a locker is service ID * 10 + locker ID (service ID 10 slashes 100% on all lockers).
         - Unsubscription notice periods are of length service ID days.
+        - Slasher is slasher #service ID.
 
     Example for service ID 3:
         - Uses locker IDs 1, 2, 3.
         - Maximum slashing percentages are 31%, 32%, 33%.
         - Unsubscription notice period is 3 days.
+        - Slasher is slasher #3.
     */
     function setUp() public virtual override {
         super.setUp();
@@ -172,10 +174,16 @@ abstract contract Registered is Deployed {
             vm.prank(service(s));
             LockerSettings[] memory lockers = new LockerSettings[](s);
             for (uint256 l = 1; l <= s; ++l) {
-                lockers[l - 1] = LockerSettings(l, s != 10 ? uint8(s * 10 + l) : 100);
+                lockers[l - 1] = LockerSettings(l, maxSlashPercentage(s, l));
             }
             hub.registerService(lockers, uint40(s * 1 days), slasher(s));
         }
+    }
+
+    function maxSlashPercentage(uint256 serviceId, uint256 lockerId) internal pure returns (uint8) {
+        require(serviceId <= 10, "Unknown service");
+        require(lockerId <= 10, "Unknown locker");
+        return serviceId != 10 ? uint8(serviceId * 10 + lockerId) : 100;
     }
 }
 
@@ -253,8 +261,30 @@ contract StakingHubTest_Registered is Registered {
         vm.expectEmit();
         emit SlasherUpdated(1, slasher(2));
         hub.finalizeSlasherUpdate();
-        vm.expectRevert("Slasher update not initiated");
-        hub.finalizeSlasherUpdate();
+    }
+
+    function testRevert_terminate_NotRegistered() public {
+        vm.prank(troll);
+        vm.expectRevert("Service not registered");
+        hub.terminate(staker(1));
+    }
+
+    function testRevert_terminate_NotSubscribed() public {
+        vm.prank(service(1));
+        vm.expectRevert("Not subscribed");
+        hub.terminate(staker(1));
+    }
+
+    function test_terminate() public {
+        vm.prank(staker(1));
+        hub.subscribe(2, 0);
+        vm.prank(service(2));
+        for (uint256 l = 1; l <= 2; ++l) {
+            vm.expectCall(locker(l), abi.encodeCall(ILocker.onUnsubscribe, (staker(1), 2, maxSlashPercentage(2, l))));
+        }
+        vm.expectEmit();
+        emit Unsubscribed(staker(1), 2);
+        hub.terminate(staker(1));
     }
 
     function testRevert_freeze_NotSubscribed() public {
@@ -292,29 +322,31 @@ contract StakingHubTest_Registered is Registered {
         emit StakerFrozen(staker(1), 1, vm.getBlockTimestamp() + 7 days);
         hub.freeze(staker(1));
     }
+
+    function test_freeze_ExtendPeriod() public {
+        vm.startPrank(staker(1));
+        hub.subscribe(1, 0);
+        hub.subscribe(2, 0);
+        vm.stopPrank();
+        vm.prank(slasher(1));
+        hub.freeze(staker(1));
+        skip(7 days - 1);
+        vm.prank(slasher(2));
+        hub.freeze(staker(1));
+        skip(7 days - 1);
+        vm.prank(slasher(1));
+        vm.expectRevert("Already frozen by this service");
+        hub.freeze(staker(1));
+    }
 }
 
-contract LockerMock is ILocker {
+contract LockerMock {
     function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {}
     function onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) external {}
-    function onSlash(address staker, uint256 service, uint8 percentage, uint40 freezeStart) external {}
-    function id() external view returns (uint256) {}
-    function balanceOf(address staker) external view returns (uint256 amount) {}
-    function balanceOf(address staker, uint256 service) external view returns (uint256 amount) {}
-    function votingPowerOf(address staker) external view returns (uint256 votingPower) {}
-    function votingPowerOf(address staker, uint256 service) external view returns (uint256 votingPower) {}
-    function totalSupply() external view returns (uint256) {}
-    function totalSupply(uint256 service) external view returns (uint256) {}
-    function totalVotingPower() external view returns (uint256) {}
-    function totalVotingPower(uint256 service) external view returns (uint256) {}
-    function services(address staker) external view returns (uint256[] memory) {}
-    function isSubscribed(address staker, uint256 service) external view returns (bool) {}
 }
 
-contract ServiceMock is IService {
+contract ServiceMock {
     function onSubscribe(address staker, uint256 lockingInUntil) external {}
-    function onInitiateUnsubscribe(address staker, bool lockedIn) external {}
-    function onFinalizeUnsubscribe(address staker) external {}
 }
 
 contract SlasherMock {}
