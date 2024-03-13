@@ -24,7 +24,7 @@ interface IStakingHubEvents {
     /// @param staker The address of the staker.
     /// @param serviceId The id of the service.
     /// @param lockInUntil The time until the staker is locked in.
-    event Subscribed(address indexed staker, uint256 indexed serviceId, uint40 lockInUntil);
+    event Subscribed(address indexed staker, uint256 indexed serviceId, uint40 indexed lockInUntil);
 
     /// @notice Emitted when a staker initiates unsubscription from a service.
     /// @param staker The address of the staker.

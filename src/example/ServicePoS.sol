@@ -18,6 +18,8 @@ contract ServicePoS is IService, Ownable {
 
     uint256 public id;
 
+    event ChecksPassed(address staker, uint256 lockingInUntil);
+
     // self-registers as Service, set msg.sender as owner
     constructor(address _stakingHub, ERC20Locker[] memory _lockerContracts) Ownable(msg.sender) {
         stakingHub = StakingHub(_stakingHub);
@@ -55,6 +57,8 @@ contract ServicePoS is IService, Ownable {
     // ========== TRIGGERS ==========
     function onSubscribe(address staker, uint256 lockingInUntil) public {
         // i.e. check that staker has sufficient funds in all required lockers
+
+        emit ChecksPassed(staker, lockingInUntil);
     }
 
     function onInitiateUnsubscribe(address staker, bool) public {}

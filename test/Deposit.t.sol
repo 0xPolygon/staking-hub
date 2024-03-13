@@ -12,11 +12,10 @@ import {ServicePoS} from "../src/example/ServicePoS.sol";
 import {Slasher} from "../src/example/Slasher.sol";
 
 contract Deposit is Test {
-    ERC20Mock public tkn;
-    StakingHub public stakingHub;
-    ERC20LockerExample public locker;
-    ServicePoS public service;
-    Slasher public slasher;
+    ERC20Mock tkn;
+    StakingHub stakingHub;
+    ERC20LockerExample locker;
+    ServicePoS service;
     LockerSettings[] settings;
     ERC20Locker[] lockers;
 
@@ -32,8 +31,6 @@ contract Deposit is Test {
         lockers.push(locker);
         service = new ServicePoS(address(stakingHub), lockers);
         service.init(settings, WEEK);
-
-        slasher = Slasher(service.slasher());
     }
 
     function test_deposit(uint256 amount) external {
@@ -182,7 +179,7 @@ contract Deposit is Test {
         tkn.approve(address(locker), amount);
     }
 
-    function assertDeposit(address user, uint256 amount) private {
+    function assertDeposit(address user, uint256 amount) private view {
         assertEq(0, tkn.balanceOf(user));
         assertEq(amount, locker.balanceOf(user));
 

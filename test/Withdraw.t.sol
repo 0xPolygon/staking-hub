@@ -12,13 +12,12 @@ import {ServicePoS} from "../src/example/ServicePoS.sol";
 import {Slasher} from "../src/example/Slasher.sol";
 
 contract Withdraw is Test {
-    ERC20Mock public tkn;
-    StakingHub public stakingHub;
-    ERC20LockerExample public locker;
-    ServicePoS public service;
+    ERC20Mock tkn;
+    StakingHub stakingHub;
+    ERC20LockerExample locker;
+    ServicePoS service;
     ServicePoS service1;
     ServicePoS service2;
-    Slasher public slasher;
     LockerSettings[] settings;
     ERC20Locker[] lockers;
 
@@ -40,10 +39,8 @@ contract Withdraw is Test {
         service2.init(settings, WEEK);
 
         // subscribe to services 0 and 1
-        stakingHub.subscribe(service.id(), WEEK);
-        stakingHub.subscribe(service1.id(), WEEK);
-
-        slasher = Slasher(service.slasher());
+        stakingHub.subscribe(service.id(), uint40(vm.getBlockTimestamp()) + WEEK);
+        stakingHub.subscribe(service1.id(), uint40(vm.getBlockTimestamp()) + WEEK);
     }
 
     function test_initiateWithdrawal(uint256 amount, uint256 withdraw) external {
@@ -183,7 +180,7 @@ contract Withdraw is Test {
         tkn.approve(address(locker), amount);
     }
 
-    function assertDeposit(address user, uint256 amount) private {
+    function assertDeposit(address user, uint256 amount) private view {
         assertEq(0, tkn.balanceOf(user));
         assertEq(amount, locker.balanceOf(user));
 
