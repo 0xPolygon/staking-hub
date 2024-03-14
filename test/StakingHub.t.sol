@@ -339,57 +339,115 @@ contract StakingHubTest_Registered is Registered {
         hub.freeze(staker(1));
     }
 
-    function testMalice_5_CompromizedLocker() public {
-        address vulnerableLocker = address(new RevertingLockerDummy());
+    function testMalice_CompromizedLocker_MaliciousService() public {
+        /*
+            This is a story of:
+                - a popular locker
+                - a vulnerable locker
+                - a popular service
+                - a sincere service
+                - an unsuspecting staker
+                - and a detective (🕵️‍♂️)
+        */
         address popularLocker = address(new LockerMock());
-        address sincereService = address(new ServiceMock());
+        address vulnerableLocker = address(new RevertingLockerDummy());
         address popularService = address(new ServiceMock());
+        address sincereService = address(new ServiceMock());
         address unsuspectingStaker = makeAddr("unsuspectingStaker");
         address detective = makeAddr(unicode"🕵️‍♂️");
-        vm.prank(vulnerableLocker);
-        uint256 lockerId1 = hub.registerLocker();
+        /*
+            The popular service uses the popular locker.
+            The sincere service uses the popular locker AND the vulnerable locker.
+        */
         vm.prank(popularLocker);
-        uint256 lockerId2 = hub.registerLocker();
-        vm.prank(sincereService);
-        LockerSettings[] memory lockers = new LockerSettings[](2);
-        lockers[0] = LockerSettings(lockerId1, 10);
-        lockers[1] = LockerSettings(lockerId2, 10);
-        uint256 serviceId1 = hub.registerService(lockers, 1, sincereService);
+        uint256 popLockerId = hub.registerLocker();
+        vm.prank(vulnerableLocker);
+        uint256 vlnLockerId = hub.registerLocker();
         vm.prank(popularService);
-        lockers = new LockerSettings[](1);
-        lockers[0] = LockerSettings(lockerId2, 10);
-        uint256 serviceId2 = hub.registerService(lockers, 1, popularService);
+        LockerSettings[] memory lockers = new LockerSettings[](1);
+        lockers[0] = LockerSettings(popLockerId, 10);
+        uint256 popServiceId = hub.registerService(lockers, 1, popularService);
+        vm.prank(sincereService);
+        lockers = new LockerSettings[](2);
+        lockers[0] = LockerSettings(popLockerId, 10);
+        lockers[1] = LockerSettings(vlnLockerId, 10);
+        uint256 sncServiceId = hub.registerService(lockers, 1, sincereService);
+        /*
+            The unsuspecting staker decides to subscribe to the popular service AND the sincere service.
+        */
         vm.startPrank(unsuspectingStaker);
-        hub.subscribe(serviceId1, 0);
-        hub.subscribe(serviceId2, 0);
+        hub.subscribe(popServiceId, 0);
+        hub.subscribe(sncServiceId, 0);
         vm.stopPrank();
-        RevertingLockerDummy(vulnerableLocker).revertSubscriptions();
-        RevertingLockerDummy(vulnerableLocker).revertUnsubscriptions();
+        /*
+            A year goes by, and the unsuspecting staker is earning good rewards from the both services.
+            But, one day, the vulnerable locker gets compromized and begins reverting `onSubscribe` and `onUnsubscribe`.
+        */
+        skip(365 days);
+        address compromizedLocker = vulnerableLocker;
+        RevertingLockerDummy(compromizedLocker).revertSubscriptions();
+        RevertingLockerDummy(compromizedLocker).revertUnsubscriptions();
+        /*
+            The unsuspecting staker tries unsubscribing from the sincere service in panic, to no avail.
+        */
         vm.prank(unsuspectingStaker);
         vm.expectRevert("Locker!");
-        hub.initiateUnsubscribe(serviceId1);
+        hub.initiateUnsubscribe(sncServiceId);
+        /*
+            The detective is brought onto the scene.
+            He probes subscribing to the sincere service, confirming that both subscriptions and unsubscriptions are disabled.
+            Unless a staker initiated unsubscription before the locker was compromized, unsubscribing was no longer possible.
+        */
         vm.prank(detective);
         vm.expectRevert("Locker!");
-        hub.subscribe(serviceId1, 0);
-        address zombieService = sincereService;
+        hub.subscribe(sncServiceId, 0);
+        /*
+            The detective concludes the service is cut off from the rest of the ecosystem, but remains able to slash the stakers.
+            Such services may go berserk at any time.
+        */
         address unsafeStaker = unsuspectingStaker;
-        vm.startPrank(zombieService);
+        /* 
+            The sincere service decides to...
+
+            a̶)̶ r̶e̶p̶o̶r̶t̶ t̶h̶e̶ l̶o̶c̶k̶e̶r̶
+            𝐛) 𝐝𝐨 𝐧𝐨𝐭𝐡𝐢𝐧𝐠
+
+            The sincere service decides to do nothing. Two years pass.
+            The unsafe staker's remained subscribed to the popular service.
+            After all, the rewards are good, and the sincere service has not gone berserk.
+        */
+        skip(730 days);
+        /*
+            One day, out of the blue, the sincere goes berserk and starts slashing the stakers.
+        */
+        address berserkService = sincereService;
+        vm.startPrank(berserkService);
         hub.freeze(unsafeStaker);
         uint8[] memory percentages = new uint8[](2);
         percentages[0] = 10;
         percentages[1] = 10;
         hub.slash(unsafeStaker, percentages);
-        vm.stopPrank();
-        skip(700 days);
-        vm.prank(unsuspectingStaker);
-        vm.expectRevert("Locker!");
-        hub.initiateUnsubscribe(serviceId1);
-        vm.startPrank(zombieService);
-        hub.freeze(unsafeStaker);
-        percentages = new uint8[](2);
-        percentages[0] = 10;
-        percentages[1] = 10;
-        hub.slash(unsafeStaker, percentages);
+        /* 
+            😲
+            The situation finally hits the unsafe staker.
+            The tokens in the popular locker are not safe from the berserk service!
+            The staker decides to...
+
+                a̶)̶ s̶̶e̶t̶ t̶h̶e̶ b̶e̶r̶s̶k̶e̶r̶ s̶e̶r̶v̶i̶c̶e̶'s̶ a̶l̶l̶o̶w̶a̶n̶c̶e̶ t̶o̶ 0̶
+                𝐛) 𝐚𝐛𝐚𝐧𝐝𝐨𝐧 𝐭𝐡𝐞 𝐚𝐜𝐜𝐨𝐮𝐧𝐭 𝐚𝐧𝐝 𝐫𝐞𝐬𝐭𝐚𝐫𝐭 𝐟𝐫𝐨𝐦 𝐳𝐞𝐫𝐨
+
+            The staker decides to abandon the account and restart from zero.
+            They witdhraw their funds in hurry before the bersker service slashes everything they have in the popular locker.
+        */
+
+        /* 
+            ...
+            This story could have gone differently.
+            If only the staker had a choice, they could have rewritten the ending.
+            Alas, the story ends here, and we've reached the
+                                            
+                                            BAD ENDING
+        */
     }
 }
 
