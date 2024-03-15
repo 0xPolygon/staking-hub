@@ -39,7 +39,7 @@ contract StakingHub is SlashingManager {
     function initiateUnsubscribe(uint256 service) external notFrozen returns (uint40 unsubscribableFrom) {
         unsubscribableFrom = _initiateUnsubscription(msg.sender, service);
 
-        bool lockedIn = _isLockedIn(msg.sender, service) && !_slasherUpdateScheduled(service);
+        bool lockedIn = _isLockedIn(msg.sender, service);
         if (lockedIn) {
             _service(service).onInitiateUnsubscribe(msg.sender, lockedIn);
         } else {

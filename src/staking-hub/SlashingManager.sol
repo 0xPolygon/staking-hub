@@ -70,10 +70,6 @@ abstract contract SlashingManager is ServiceManager {
         emit SlasherUpdated(service, newSlasher);
     }
 
-    function _slasherUpdateScheduled(uint256 service) internal view returns (bool) {
-        return _slashers.slashers[service].newSlasher == address(0);
-    }
-
     function _freeze(address staker, address slasher) internal {
         uint256 service = _slashers.services[slasher];
         require(_isSubscribed(staker, service), "Not subscribed");
@@ -140,6 +136,7 @@ abstract contract SlashingManager is ServiceManager {
     }
 
     function _isLockedIn(address staker, uint256 service) internal view override returns (bool) {
+        // if the slasher is being updated, lock-ins are voided
         return super._isLockedIn(staker, service) && _slashers.slashers[service].scheduledTime == 0;
     }
 }

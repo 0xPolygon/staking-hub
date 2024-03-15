@@ -30,7 +30,7 @@ interface IStakingHubEvents {
     /// @param staker The address of the staker.
     /// @param serviceId The id of the service.
     /// @param unsubscribableFrom The timestamp when the unsubscription can be finalized.
-    event UnsubscriptionInitiated(address indexed staker, uint256 indexed serviceId, uint256 unsubscribableFrom);
+    event UnsubscriptionInitiated(address indexed staker, uint256 indexed serviceId, uint256 indexed unsubscribableFrom);
 
     /// @notice Emitted when a callback to the service during unsubscription initiation reverts.
     /// @param staker The address of the staker.

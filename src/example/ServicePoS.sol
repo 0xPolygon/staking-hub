@@ -61,7 +61,9 @@ contract ServicePoS is IService, Ownable {
         emit ChecksPassed(staker, lockingInUntil);
     }
 
-    function onInitiateUnsubscribe(address staker, bool) public {}
+    function onInitiateUnsubscribe(address, /* staker */ bool lockedIn) public pure {
+        require(!lockedIn, "Staker is locked in");
+    }
 
     function onFinalizeUnsubscribe(address staker) public {}
 }
