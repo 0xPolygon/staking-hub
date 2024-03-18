@@ -8,6 +8,8 @@ via_ir = true
 solc = "0.8.24"
 verbosity = 2
 ffi = true
+gas_reports = ["StakingHub", "ERC20LockerExample", "ServicePoS"]
+
 
 remappings = [
   "forge-std=lib/forge-std/src",
