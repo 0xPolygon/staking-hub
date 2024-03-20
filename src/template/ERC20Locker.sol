@@ -66,10 +66,10 @@ abstract contract ERC20Locker is ILocker {
         }
     }
 
-    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint256 lockedInUntil) external {
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint256 lockedInUntil, uint256 allowance_) external {
         require(msg.sender == address(_stakingHub), "Unauthorized");
         _serviceStorage.addService(staker, service, lockedInUntil);
-        _allowances[staker][service].allowance = type(uint256).max;
+        _allowances[staker][service].allowance = allowance_;
         _onSubscribe(staker, service, maxSlashPercentage);
     }
 
@@ -86,7 +86,7 @@ abstract contract ERC20Locker is ILocker {
         SlashingData storage slashingData = _getSlashingData(staker, freezeStart);
         uint256 initialBalance = slashingData.initialBalance;
         uint256 totalSlashed = slashingData.totalSlashed;
-        uint256 slashAmount = (_getLower(_allowances[staker][service].allowance, initialBalance) * percentage) / 100;
+        uint256 slashAmount = (_getLesser(_allowances[staker][service].allowance, initialBalance) * percentage) / 100;
         if (totalSlashed + slashAmount > initialBalance) {
             slashAmount = initialBalance - totalSlashed;
             if (slashAmount == 0) return;
@@ -102,16 +102,12 @@ abstract contract ERC20Locker is ILocker {
         return _balanceOf(staker);
     }
 
-    function balanceOf(address staker, uint256 serviceId) external view returns (uint256 balance) {
-        return _balanceOf(staker, serviceId);
-    }
-
     function totalSupply() external view returns (uint256) {
         return _totalSupply();
     }
 
-    function totalSupply(uint256 serviceId) external view returns (uint256) {
-        return _totalSupply(serviceId);
+    function totalStake(uint256 serviceId) external view returns (uint256) {
+        return _totalStake(serviceId);
     }
 
     function votingPowerOf(address staker) external view returns (uint256 votingPower) {
@@ -166,11 +162,9 @@ abstract contract ERC20Locker is ILocker {
 
     function _balanceOf(address staker) internal view virtual returns (uint256 balance);
 
-    function _balanceOf(address staker, uint256 serviceId) internal view virtual returns (uint256 balance);
-
     function _totalSupply() internal view virtual returns (uint256);
 
-    function _totalSupply(uint256 serviceId) internal view virtual returns (uint256);
+    function _totalStake(uint256 serviceId) internal view virtual returns (uint256);
 
     function _votingPowerOf(address staker) internal view virtual returns (uint256 votingPower);
 
@@ -202,7 +196,6 @@ abstract contract ERC20Locker is ILocker {
         _allowances[staker][service].scheduledAllowance = newAllowance;
         _allowances[staker][service].scheduledTime = block.timestamp + (decreasing ? STAKER_WITHDRAWAL_DELAY : 0);
 
-        // Note: Security consideration - The service should assume the staker will finalize the approval if the allowance is supposed to DECREASE.
         emit AllowanceChanged(staker, service, newAllowance);
 
         if (!decreasing) {
@@ -221,36 +214,25 @@ abstract contract ERC20Locker is ILocker {
         emit Approved(staker, service, allowanceData.scheduledAllowance);
     }
 
-    // FOR EXTERNAL USE, MAINLY. ONLY USE INTERNALLY IF YOU KNOW WHAT YOU'RE DOING!
+    /// For withdrawaing and slashing, use `_allowances[staker][service].allowance`.
     function allowance(address staker, uint256 service) public view returns (uint256 amount) {
         Allowance memory allowanceData = _allowances[staker][service];
         uint256 currentAllowance = allowanceData.allowance;
         uint256 newAllowance = allowanceData.scheduledAllowance;
-        // If nothing scheduled, return the allowance.
-        if (allowanceData.scheduledTime == 0) return currentAllowance;
-        // If something scheduled, return the new allowance if it's going to decrease, or the current allowance if it's going to increase.
-        return newAllowance < currentAllowance ? newAllowance : currentAllowance;
+        if (allowanceData.scheduledTime == 0) {
+            return currentAllowance;
+        } else {
+            return newAllowance;
+        }
     }
 
-    // FOR EXTERNAL USE, MAINLY. ONLY USE INTERNALLY IF YOU KNOW WHAT YOU'RE DOING!
     function stakeOf(address staker, uint256 service) public view returns (uint256 stake) {
-        uint256 balance = _balanceOf(staker); // taken out immediately (^) but remians slashable (*)
-        // uint256 allowance_ = _allowances[staker][service].allowance; // actual (*) but report the future one (^)
-        // so, when they ask what's the balance, they get what it will be
-        // when they ask what's the allowance, they get what it will be
-        // they should slash based on percentages, so the actual balance doesn't matter
-        // they SHOULD assume any allowance decrease will be finalized, and only care about the reported (future) allowance
-        // ... since they should slashed based on percentages and not amounts, the actual allowance doesn't matter
-        // btw when i say should slash based on percentages, i mean that the punishment A should be x%, not a static amount y.
-        // we track balances and allowances a bit differently - we need to sum the balance and withdrawal, but only read allowance, when working with them.
-        // so, what should we do here? this reports how much a staker has staked in a service
-        // total stakes for services are tracked on init withdrawal/approval when the balance tracking is updated, but allowance tracking is updated only if increasing, not decreasing
-        // therefore, we should use the future allowance, which we can get from the public getter
+        uint256 balance = _balanceOf(staker);
         uint256 allowance_ = allowance(staker, service);
-        return _getLower(allowance_, balance);
+        return _getLesser(allowance_, balance);
     }
 
-    function _getLower(uint256 a, uint256 b) internal pure returns (uint256 lower) {
+    function _getLesser(uint256 a, uint256 b) internal pure returns (uint256 lower) {
         return a <= b ? a : b;
     }
 

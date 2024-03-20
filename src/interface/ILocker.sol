@@ -23,7 +23,8 @@ interface ILocker {
     /// @param staker The staker subscribing to the service.
     /// @param service The service being subscribed to.
     /// @param maxSlashPercentage Maximum percentage that can be slashed from the staker's balance.
-    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint256 lockedInUntil) external;
+    /// @param allowance The allowance to set for the service.
+    function onSubscribe(address staker, uint256 service, uint8 maxSlashPercentage, uint256 lockedInUntil, uint256 allowance) external;
 
     /// @notice Called by the Staking Hub when a staker unsubscribes from a service. Must perform internal accounting such as updating the total supply of assets restaked to the service.
     /// @param staker The staker unsubscribing from the service.
@@ -46,7 +47,7 @@ interface ILocker {
     function balanceOf(address staker) external view returns (uint256 amount);
 
     /// @return amount The amount of underlying funds of the staker deposited into the locker and restaked to the service.
-    function balanceOf(address staker, uint256 service) external view returns (uint256 amount);
+    function stakeOf(address staker, uint256 service) external view returns (uint256 amount);
 
     /// @return votingPower The representation of the voting power of the stakers underlying balance.
     function votingPowerOf(address staker) external view returns (uint256 votingPower);
@@ -58,7 +59,7 @@ interface ILocker {
     function totalSupply() external view returns (uint256);
 
     /// @return The total supply of underlying funds of all stakers deposited into the locker and restaked to the service.
-    function totalSupply(uint256 service) external view returns (uint256);
+    function totalStake(uint256 service) external view returns (uint256);
 
     /// @return The total representation of the voting power of all stakers underlying balances.
     function totalVotingPower() external view returns (uint256);

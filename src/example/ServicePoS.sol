@@ -50,7 +50,7 @@ contract ServicePoS is IService, Ownable {
     }
 
     // ========== TRIGGERS ==========
-    function onSubscribe(address staker, uint256 lockingInUntil) public {
+    function onSubscribe(address staker, uint256 lockingInUntil, uint256[] calldata customAllowances) public {
         // i.e. check that staker has sufficient funds in all required lockers
     }
 

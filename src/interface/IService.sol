@@ -9,7 +9,8 @@ interface IService {
     /// @dev May perform checks, such as minimum stake requirements, etc. and revert if the staker is not eligible to subscribe.
     /// @param staker The staker subscribing to the service.
     /// @param lockingInUntil The time until the staker is locked in.
-    function onSubscribe(address staker, uint256 lockingInUntil) external;
+    /// @param customAllowances The custom allowance for each locker, if specified.
+    function onSubscribe(address staker, uint256 lockingInUntil, uint256[] calldata customAllowances) external;
 
     /// @notice Called by the Staking Hub when a staker initiates unsubscription from the service.
     /// @dev If the staker is locked in, the service can prevent unsubsctiption by reverting.

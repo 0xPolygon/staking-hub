@@ -14,26 +14,34 @@ contract StakingHub is SlashingManager {
         return _setLocker(msg.sender);
     }
 
-    function registerService(LockerSettings[] calldata lockers, uint40 unsubNotice, address slasher) external returns (uint256 id) {
+    function registerService(LockerSettings[] calldata lockers_, uint40 unsubNotice, address slasher) external returns (uint256 id) {
         require(slasher != address(0), "Invalid slasher");
 
-        (uint256[] memory lockerIds, uint256 slashingPercentages) = _formatLockers(lockers);
+        (uint256[] memory lockerIds, uint256 slashingPercentages) = _formatLockers(lockers_);
         id = _setService(msg.sender, lockerIds, slashingPercentages, unsubNotice);
         _setSlasher(id, slasher);
     }
 
-    function subscribe(uint256 service, uint40 lockInUntil) external notFrozen {
+    function subscribe(uint256 service, uint40 lockInUntil) external {
+        subscribe(service, lockInUntil, new uint256[](0));
+    }
+
+    function subscribe(uint256 service, uint40 lockInUntil, uint256[] memory customAllowances) public notFrozen {
         require(service != 0 && service <= _services.counter, "Invalid service");
+        uint256[] memory lockers_ = _lockers(service);
+        uint256 len = lockers_.length;
+        bool allowancesMax = customAllowances.length == 0;
+        require(allowancesMax || customAllowances.length == len, "Invalid length of custom allowances");
 
         _subscribe(msg.sender, service, lockInUntil);
 
-        uint256[] memory lockers = _lockers(service);
         uint256 slashingPercentages = _slashingPercentages(service);
-        uint256 len = lockers.length;
         for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onSubscribe(msg.sender, service, slashingPercentages.get(i), lockInUntil);
+            locker(lockers_[i]).onSubscribe(
+                msg.sender, service, slashingPercentages.get(i), lockInUntil, allowancesMax ? type(uint256).max : customAllowances[i]
+            );
         }
-        _service(service).onSubscribe(msg.sender, lockInUntil);
+        _service(service).onSubscribe(msg.sender, lockInUntil, customAllowances);
     }
 
     function initiateUnsubscribe(uint256 service) external notFrozen returns (uint40 unsubscribableFrom) {
@@ -86,6 +94,10 @@ contract StakingHub is SlashingManager {
         return _isFrozen(staker);
     }
 
+    function lockers(uint256 service) external view returns (uint256[] memory lockers_) {
+        return _lockers(service);
+    }
+
     function _notifyServiceOnUnsub(address staker, uint256 service) private {
         try _service(service).onFinalizeUnsubscribe{gas: SERVICE_UNSUB_GAS}(staker) {}
         catch (bytes memory revertData) {
@@ -94,11 +106,11 @@ contract StakingHub is SlashingManager {
     }
 
     function _notifyLockersOnUnsub(address staker, uint256 service) private {
-        uint256[] memory lockers = _lockers(service);
-        uint256 len = lockers.length;
+        uint256[] memory lockers_ = _lockers(service);
+        uint256 len = lockers_.length;
 
         for (uint256 i; i < len; ++i) {
-            locker(lockers[i]).onUnsubscribe(staker, service, _slashingPercentages(service).get(i));
+            locker(lockers_[i]).onUnsubscribe(staker, service, _slashingPercentages(service).get(i));
         }
     }
 }
