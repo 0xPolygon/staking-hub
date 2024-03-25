@@ -11,14 +11,13 @@ contract ERC20LockerExample is ERC20Locker {
     IERC20 internal immutable underlying;
     address internal immutable _burnAddress;
 
-    mapping(address staker => uint256 balance) internal _balances;
-    uint256 internal _globalTotalSupply;
-    mapping(uint256 serviceId => uint256 supply) internal _serviceSupplies;
-
-    constructor(address _underlying, address stakingHub, address burnAddress) {
+    constructor(address _underlying, address burnAddress) {
         underlying = IERC20(_underlying);
         _burnAddress = burnAddress;
-        __initializeERC20Locker(stakingHub);
+    }
+
+    function initialize(address stakingHub) external initializer {
+        __ERC20Locker_init(stakingHub);
     }
 
     function registerLocker() external returns (uint256 id) {
@@ -36,8 +35,7 @@ contract ERC20LockerExample is ERC20Locker {
     function _deposit(address user, uint256 amount) private {
         require(!_stakingHub.isFrozen(user), "Staker is frozen");
 
-        _balances[user] += amount;
-        _globalTotalSupply += amount;
+        _mint(user, amount);
 
         uint256[] memory userServices = services(user);
         uint256 len = userServices.length;
@@ -47,19 +45,18 @@ contract ERC20LockerExample is ERC20Locker {
 
         underlying.transferFrom(msg.sender, address(this), amount);
 
-        emit BalanceChanged(user, _balances[user]);
+        emit BalanceChanged(user, balanceOf(user));
     }
 
     /// @notice amount is immediately subtracted, so that stakers cannot use it in subscriptions anymore
     /// @notice amount can still be slashed during the withdrawal delay though (_slashPendingWithdrawal)
     function initiateWithdrawal(uint256 amount) external {
         require(!_stakingHub.isFrozen(msg.sender), "Staker is frozen");
-        require(amount <= _balances[msg.sender], "Insufficient balance");
+        require(amount <= balanceOf(msg.sender), "Insufficient balance");
 
         _registerWithdrawal(msg.sender, amount);
 
-        _balances[msg.sender] -= amount;
-        _globalTotalSupply -= amount;
+        _burn(msg.sender, amount);
 
         uint256[] memory userServices = services(msg.sender);
         uint256 len = userServices.length;
@@ -67,7 +64,7 @@ contract ERC20LockerExample is ERC20Locker {
             _serviceSupplies[userServices[i]] -= amount;
         }
 
-        emit BalanceChanged(msg.sender, _balances[msg.sender]);
+        emit BalanceChanged(msg.sender, balanceOf(msg.sender));
     }
 
     /// @notice amount is transferred to staker (if not slashed in the meantime)
@@ -85,8 +82,7 @@ contract ERC20LockerExample is ERC20Locker {
         uint256 remainder = _slashPendingWithdrawal(staker, amount);
 
         if (remainder != 0) {
-            _balances[msg.sender] -= remainder;
-            _globalTotalSupply -= remainder;
+            _burn(staker, remainder);
 
             uint256[] memory userServices = services(msg.sender);
             uint256 len = userServices.length;
@@ -96,35 +92,19 @@ contract ERC20LockerExample is ERC20Locker {
         }
         underlying.transfer(_burnAddress, amount);
 
-        emit BalanceChanged(msg.sender, _balances[msg.sender]);
-    }
-
-    function _balanceOf(address staker) internal view virtual override returns (uint256 balance) {
-        return _balances[staker];
-    }
-
-    function _balanceOf(address staker, uint256 serviceId) internal view virtual override returns (uint256 balance) {
-        return isSubscribed(staker, serviceId) ? _balances[staker] : 0;
-    }
-
-    function _totalSupply() internal view virtual override returns (uint256 totalSupply) {
-        return _globalTotalSupply;
-    }
-
-    function _totalSupply(uint256 serviceId) internal view virtual override returns (uint256 totalSupply) {
-        return _serviceSupplies[serviceId];
+        emit BalanceChanged(msg.sender, balanceOf(msg.sender));
     }
 
     function _votingPowerOf(address staker) internal view virtual override returns (uint256 votingPower) {
-        return _balances[staker];
+        return balanceOf(staker);
     }
 
     function _votingPowerOf(address staker, uint256 service) internal view virtual override returns (uint256 votingPower) {
-        return isSubscribed(staker, service) ? _balances[staker] : 0;
+        return isSubscribed(staker, service) ? balanceOf(staker) : 0;
     }
 
     function _totalVotingPower() internal view virtual override returns (uint256 totalVotingPower) {
-        return _globalTotalSupply;
+        return totalSupply();
     }
 
     function _totalVotingPower(uint256 service) internal view virtual override returns (uint256 totalVotingPower) {

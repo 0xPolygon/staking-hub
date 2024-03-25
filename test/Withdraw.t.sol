@@ -26,7 +26,8 @@ contract Withdraw is Test {
     function setUp() public {
         tkn = new ERC20Mock();
         stakingHub = new StakingHub();
-        locker = new ERC20LockerExample(address(tkn), address(stakingHub), address(0));
+        locker = new ERC20LockerExample(address(tkn), address(0));
+        locker.initialize(address(stakingHub));
         uint256 lockerId = locker.registerLocker();
 
         settings.push(LockerSettings(lockerId, 20));

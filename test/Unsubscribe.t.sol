@@ -187,7 +187,8 @@ contract Subscribe is Test {
 
     function createLockersAndService(address stakingHub_, uint8[] memory maxSlashPercentages_) internal returns (uint256 serviceId) {
         for (uint256 i; i < maxSlashPercentages_.length; ++i) {
-            ERC20LockerExample locker = new ERC20LockerExample(address(new ERC20Mock()), stakingHub_, address(0));
+            ERC20LockerExample locker = new ERC20LockerExample(address(new ERC20Mock()), address(0));
+            locker.initialize(stakingHub_);
             uint256 id = locker.registerLocker();
             lockers.push(locker);
             settings.push(LockerSettings(id, maxSlashPercentages_[i]));
@@ -219,7 +220,8 @@ contract Subscribe is Test {
 
 contract MockServiceRevert {
     function init(StakingHub stakingHub) public returns (uint256 id) {
-        ERC20LockerExample locker = new ERC20LockerExample(address(new ERC20Mock()), address(stakingHub), address(0));
+        ERC20LockerExample locker = new ERC20LockerExample(address(new ERC20Mock()), address(0));
+        locker.initialize(address(stakingHub));
         uint256 lockerId = locker.registerLocker();
         LockerSettings[] memory settings = new LockerSettings[](1);
         settings[0] = LockerSettings(lockerId, 20);

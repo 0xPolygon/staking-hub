@@ -39,9 +39,6 @@ interface ILocker {
     /// @return The id of the locker.
     function id() external view returns (uint256);
 
-    /// @return amount The amount of underlying funds of the staker deposited into the locker.
-    function balanceOf(address staker) external view returns (uint256 amount);
-
     /// @return amount The amount of underlying funds of the staker deposited into the locker and restaked to the service.
     function balanceOf(address staker, uint256 service) external view returns (uint256 amount);
 
@@ -50,9 +47,6 @@ interface ILocker {
 
     /// @return votingPower The representation of the voting power of the stakers underlying balance within a service.
     function votingPowerOf(address staker, uint256 service) external view returns (uint256 votingPower);
-
-    /// @return The total supply of underlying funds of all stakers deposited into the locker.
-    function totalSupply() external view returns (uint256);
 
     /// @return The total supply of underlying funds of all stakers deposited into the locker and restaked to the service.
     function totalSupply(uint256 service) external view returns (uint256);

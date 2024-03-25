@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.24;
 
+import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {ILocker} from "../interface/ILocker.sol";
 import {StakingHub} from "../StakingHub.sol";
 import {ServiceTracker, ServiceStorage} from "../lib/ServiceTracker.sol";
 
-abstract contract ERC20Locker is ILocker {
+abstract contract ERC20Locker is ILocker, ERC20Upgradeable {
     using ServiceTracker for ServiceStorage;
+
+    mapping(uint256 serviceId => uint256 supply) internal _serviceSupplies;
 
     uint256 internal constant STAKER_WITHDRAWAL_DELAY = 7 days;
 
@@ -28,7 +31,7 @@ abstract contract ERC20Locker is ILocker {
     mapping(address staker => PendingWithdrawal) pending;
     ServiceStorage internal _serviceStorage;
 
-    function __initializeERC20Locker(address stakingHub) internal {
+    function __ERC20Locker_init(address stakingHub) internal onlyInitializing {
         _stakingHub = StakingHub(stakingHub);
     }
 
@@ -93,20 +96,12 @@ abstract contract ERC20Locker is ILocker {
         _onSlash(staker, service, amount);
     }
 
-    function balanceOf(address staker) external view returns (uint256 balance) {
-        return _balanceOf(staker);
-    }
-
     function balanceOf(address staker, uint256 serviceId) external view returns (uint256 balance) {
-        return _balanceOf(staker, serviceId);
+        return isSubscribed(staker, serviceId) ? balanceOf(staker) : 0;
     }
 
-    function totalSupply() external view returns (uint256) {
-        return _totalSupply();
-    }
-
-    function totalSupply(uint256 serviceId) external view returns (uint256) {
-        return _totalSupply(serviceId);
+    function totalSupply(uint256 serviceId) public view virtual override returns (uint256) {
+        return _serviceSupplies[serviceId];
     }
 
     function votingPowerOf(address staker) external view returns (uint256 votingPower) {
@@ -142,7 +137,7 @@ abstract contract ERC20Locker is ILocker {
         uint256 len = _slashingData[staker].length;
         if (len == 0 || _slashingData[staker][len - 1].freezeStart < freezeStart) {
             _slashingData[staker].push(
-                SlashingData({freezeStart: freezeStart, totalSlashed: 0, initialBalance: _balanceOf(staker) + _pendingWithdrawal(staker)})
+                SlashingData({freezeStart: freezeStart, totalSlashed: 0, initialBalance: balanceOf(staker) + _pendingWithdrawal(staker)})
             );
             len++;
         }
@@ -158,14 +153,6 @@ abstract contract ERC20Locker is ILocker {
     function _onUnsubscribe(address staker, uint256 service, uint8 maxSlashPercentage) internal virtual {}
 
     function _onSlash(address staker, uint256 service, uint256 amount) internal virtual {}
-
-    function _balanceOf(address staker) internal view virtual returns (uint256 balance);
-
-    function _balanceOf(address staker, uint256 serviceId) internal view virtual returns (uint256 balance);
-
-    function _totalSupply() internal view virtual returns (uint256);
-
-    function _totalSupply(uint256 serviceId) internal view virtual returns (uint256);
 
     function _votingPowerOf(address staker) internal view virtual returns (uint256 votingPower);
 

@@ -8,7 +8,7 @@ contract RiskManagingLocker is ERC20LockerExample {
 
     mapping(address => uint256) public stakerRisk;
 
-    constructor(address _underlying, address stakingHub, address burnAddress, uint256 _maxRisk) ERC20LockerExample(_underlying, stakingHub, burnAddress) {
+    constructor(address _underlying, address burnAddress, uint256 _maxRisk) ERC20LockerExample(_underlying, burnAddress) {
         maxRisk = _maxRisk;
     }
 
